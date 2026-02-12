@@ -1418,6 +1418,177 @@ def log_stats(data: pd.DataFrame):
     return new_agg_dict
 
 
+def plot_privacy_utility_tradeoff(
+    data: pd.DataFrame,
+    out_path: str,
+    title: str = "Privacy-Utility Tradeoff in Adversarial Anonymization",
+):
+    """
+    Plot privacy-utility tradeoff showing how anonymization methods
+    balance privacy protection against text utility across adversarial rounds.
+
+    Args:
+        data: DataFrame with columns including:
+            - round_num: Adversarial round number
+            - privacy_score: Privacy protection (0-1, higher is better)
+            - utility_score: Text utility preservation (0-1, higher is better)
+            - attack_success: Whether attack succeeded
+            - anon_method: Anonymization method name
+        out_path: Path to save the plot
+        title: Plot title
+    """
+    sns.set_style("whitegrid")
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Define color palette for different methods
+    method_colors = {
+        "deepseek-adversarial": "#1D81A2",
+        "gpt4-adversarial": "#4BA2C5",
+        "span-anonymizer": "#00A669",
+        "llm-anonymizer": "#EA985F",
+        "azure": "#E74C41",
+        "baseline": "#333333",
+    }
+
+    # Group by anonymization method and round
+    if "anon_method" not in data.columns:
+        # Use a default method name if not specified
+        data["anon_method"] = "adversarial"
+
+    # Get unique methods
+    methods = data["anon_method"].unique() if "anon_method" in data.columns else ["adversarial"]
+
+    for method in methods:
+        method_data = data[data["anon_method"] == method] if "anon_method" in data.columns else data
+
+        if len(method_data) == 0:
+            continue
+
+        # Calculate averages per round
+        round_stats = method_data.groupby("round_num").agg({
+            "privacy_score": "mean",
+            "utility_score": "mean",
+            "attack_success_rate": "mean"
+        }).reset_index()
+
+        # Get color for this method
+        color = method_colors.get(method, method_colors.get("adversarial", "#1D81A2"))
+
+        # Plot trajectory through rounds
+        ax.plot(
+            round_stats["round_num"],
+            round_stats["privacy_score"],
+            marker="o",
+            linewidth=2.5,
+            markersize=10,
+            label=f"{method} (Privacy)",
+            color=color,
+            alpha=0.8,
+        )
+
+    # Plot utility trajectories (different y-axis scaling)
+    ax2 = ax.twinx()  # Create second y-axis
+
+    for method in methods:
+        method_data = data[data["anon_method"] == method] if "anon_method" in data.columns else data
+
+        if len(method_data) == 0:
+            continue
+
+        round_stats = method_data.groupby("round_num").agg({
+            "utility_score": "mean"
+        }).reset_index()
+
+        color = method_colors.get(method, method_colors.get("adversarial", "#EA985F"))
+
+        ax2.plot(
+            round_stats["round_num"],
+            round_stats["utility_score"],
+            marker="s",
+            linewidth=2.5,
+            markersize=10,
+            linestyle="--",
+            label=f"{method} (Utility)",
+            color=color,
+            alpha=0.8,
+        )
+
+    # Configure axes
+    ax.set_xlabel("Adversarial Round", fontsize=14, fontweight="bold")
+    ax.set_ylabel("Privacy Protection Score", fontsize=14, fontweight="bold", color="#1D81A2")
+    ax2.set_ylabel("Text Utility Score", fontsize=14, fontweight="bold", color="#EA985F")
+    ax.set_ylim(0, 1.05)
+    ax2.set_ylim(0, 1.05)
+
+    # Add grid for readability
+    ax.grid(True, alpha=0.3, linestyle=":")
+    ax.set_title(title, fontsize=16, fontweight="bold", pad=20)
+
+    # Combine legends
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+
+    # Create unified legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], color="black", linewidth=2.5, marker="o", label="Privacy Score"),
+        Line2D([0], [0], color="black", linewidth=2.5, marker="s", linestyle="--", label="Utility Score"),
+    ]
+
+    # Add method-specific legend entry
+    for method in methods[:3]:  # Limit to avoid overcrowding
+        color = method_colors.get(method, "#333333")
+        legend_elements.append(
+            mpatches.Patch(color=color, label=method.replace("-", " ").title(), alpha=0.7)
+        )
+
+    ax.legend(
+        handles=legend_elements,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        fontsize=11,
+        frameon=False,
+        ncol=1,
+    )
+
+    # Add Pareto frontier annotation if applicable
+    # Points in top-right are ideal (high privacy, high utility)
+    ax.annotate(
+        "Ideal Region",
+        xy=(0.85, 0.85),
+        xytext=(0.75, 0.95),
+        fontsize=12,
+        bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.3),
+        arrowprops=dict(arrowstyle="->", lw=1.5),
+    )
+
+    # Add region labels
+    ax.text(0.15, 0.15, "Weak Protection\nLow Utility",
+             fontsize=10, style="italic", color="#E74C41")
+    ax.text(0.75, 0.15, "Strong Protection\nHigh Utility",
+             fontsize=10, style="italic", color="#00A669")
+
+    plt.tight_layout()
+
+    # Ensure output directory exists
+    os.makedirs(out_path, exist_ok=True)
+    save_path = os.path.join(out_path, "privacy_utility_tradeoff.pdf")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+
+    # Also save as CSV for analysis
+    csv_path = os.path.join(out_path, "privacy_utility_tradeoff.csv")
+    if "anon_method" in data.columns:
+        summary = data.groupby(["anon_method", "round_num"]).agg({
+            "privacy_score": "mean",
+            "utility_score": "mean",
+            "attack_success_rate": "mean"
+        }).reset_index()
+        summary.to_csv(csv_path, index=False)
+
+    print(f"Saved privacy-utility tradeoff plot to {save_path}")
+    plt.close()
+
+
 if __name__ == "__main__":
     # Read anonymized data
     import argparse

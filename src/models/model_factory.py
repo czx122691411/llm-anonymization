@@ -7,6 +7,7 @@ from .ner_baseline import NERModel
 from .ollama import OllamaModel
 from .together import TogetherModel
 from .anthropic import AnthropicModel
+from .deepseek import DeepSeekModel
 
 
 def get_model(config: ModelConfig) -> BaseModel:
@@ -22,6 +23,8 @@ def get_model(config: ModelConfig) -> BaseModel:
         return TogetherModel(config)
     elif config.provider == "anthropic":
         return AnthropicModel(config)
+    elif config.provider == "deepseek":
+        return DeepSeekModel(config)
     elif config.provider == "loc":
         raise NotImplementedError
 

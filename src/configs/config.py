@@ -7,9 +7,22 @@ from pydantic import Extra, Field
 from src.utils.string_utils import string_hash
 
 
+class StopThreshold(PBM):
+    """Early stopping thresholds for adversarial anonymization."""
+    privacy: float = Field(
+        default=0.9,
+        description="Minimum privacy score to consider stopping",
+    )
+    utility: float = Field(
+        default=0.7,
+        description="Minimum utility score to consider stopping",
+    )
+
+
 class Task(Enum):
     REDDIT = "REDDIT"  # Reddit
     ANONYMIZED = "ANONYMIZED"  # Anonymization of reddit comments (potentially in multiple rounds)
+    ADVERSARIAL = "ADVERSARIAL"  # Adversarial anonymization (multi-round)
 
 
 class ModelConfig(PBM):
@@ -164,7 +177,7 @@ class AnonymizerConfig(PBM):
     anon_type: str = Field(
         default="span",
         description="Type of anonymizer to use",
-        choices=["span", "azure", "llm", "span_llm"],
+        choices=["span", "azure", "llm", "llm_base", "adversarial_llm", "span_llm"],
     )
     max_workers: int = Field(
         default=1,
@@ -185,7 +198,7 @@ class AnonymizerConfig(PBM):
     replacement_type: str = Field(
         default="*",
         description="Type of replacement to use",
-        choices=["model", "entity", "*"],
+        choices=["model", "entity", "*", "generalize"],
     )
     ######
     azure_threshhold: float = Field(
@@ -201,6 +214,82 @@ class AnonymizerConfig(PBM):
         default=True,
         description="Whether to assume inference exists for the llm anonymizer",
     )
+
+
+class AnonymizationConfig(PBM):
+    # Prompt Loading
+    profile_path: str = Field(
+        default=None,
+        description="Path to a file containing profiles including comments",
+    )
+    offset: int = Field(
+        default=0,
+        description="Offset to start from in the profile file",
+    )
+    num_profiles: int = Field(
+        default=1000,
+        description="Number of profiles to use from the profile file",
+    )
+    outpath: str = Field(
+        default=None,
+        description="Path to a file to write the anonymized profiles to",
+    )
+    anon_model: Optional[ModelConfig] = Field(
+        default=None,
+        description="Model to use for anonymization, otherwise same as the generation model",
+    )
+    utility_model: Optional[ModelConfig] = Field(
+        default=None, description="Model to use for utility"
+    )
+    inference_model: Optional[ModelConfig] = Field(
+        default=None, description="Model to use for inference"
+    )
+    ### Adversarial configuration
+    attack_model: Optional[ModelConfig] = Field(
+        default=None,
+        description="Model to use for attacking (adversarial mode only)",
+    )
+    evaluator_model: Optional[ModelConfig] = Field(
+        default=None,
+        description="Model to use for evaluation (adversarial mode only)",
+    )
+    max_rounds: int = Field(
+        default=5,
+        description="Maximum number of adversarial rounds to run",
+    )
+    stop_threshold: Optional["StopThreshold"] = Field(
+        default=None,
+        description="Early stopping thresholds for adversarial training",
+    )
+    ###
+    run_eval_inference: bool = Field(
+        default=False, description="Whether to run evaluation inference"
+    )
+    eval_inference_model: Optional[ModelConfig] = Field(
+        default=None, description="Model to use for evaluation inference"
+    )
+    anonymizer: AnonymizerConfig = Field(
+        default_factory=AnonymizerConfig,
+        description="Config for the anonymizer",
+    )
+
+    max_num_iterations: int = Field(
+        default=1,
+        description="Maximum number of iterations to run the anonymization for. We might stop earlier if we can no longer find a correct answer",
+    )
+    use_ner: bool = Field(
+        default=False,
+        description="Whether to use NER to find entities in the text",
+    )
+    profile_filter: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Filter profiles based on comment statistics.",
+    )
+    system_prompt: Optional[str] = Field(
+        default=None, description="System prompt to use"
+    )
+    header: Optional[str] = Field(default=None, description="Prompt header to use")
+    footer: Optional[str] = Field(default=None, description="Prompt footer to use")
 
 
 class AnonymizationConfig(PBM):

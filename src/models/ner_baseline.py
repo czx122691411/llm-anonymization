@@ -6,9 +6,13 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from openai.error import RateLimitError
 
-from azure.ai.textanalytics import TextAnalyticsClient, DocumentError
-from azure.core.credentials import AzureKeyCredential
-import credentials
+try:
+    from azure.ai.textanalytics import TextAnalyticsClient, DocumentError
+    from azure.core.credentials import AzureKeyCredential
+    import credentials
+    AZURE_AVAILABLE = True
+except ImportError:
+    AZURE_AVAILABLE = False
 
 from src.configs import ModelConfig
 from src.prompts import Prompt, Conversation
@@ -72,6 +76,8 @@ def recognize_entities(comments: List[str], threshhold: float):
 
 class NERModel(BaseModel):
     def __init__(self, config: ModelConfig):
+        if not AZURE_AVAILABLE:
+            raise ImportError("Azure SDK is required for NERModel. Install it with: pip install azure-ai-textanalytics")
         super().__init__(config)
         self.config = config
 

@@ -81,6 +81,11 @@ def set_credentials(model_cfg: Optional[Config] = None) -> None:
         openai.api_base = azure_endpoint
         openai.api_key = azure_key
         openai.api_version = azure_api_version
+    elif model_cfg.gen_model.provider == "deepseek":
+        from credentials import openai_api_key
+
+        openai.api_key = openai_api_key
+        openai.api_base = "https://api.deepseek.com"
 
 
 @no_type_check

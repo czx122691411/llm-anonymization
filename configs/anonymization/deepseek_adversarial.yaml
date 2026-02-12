@@ -1,0 +1,109 @@
+# DeepSeek Adversarial Anonymization Configuration
+#
+# This configuration implements an adversarial framework using DeepSeek models:
+# - Defender (anonymizer): deepseek-chat (DeepSeek-V3)
+# - Attacker: deepseek-reasoner (DeepSeek-R1, reasoning model)
+# - Evaluator: deepseek-chat (DeepSeek-V3)
+#
+# The system runs multiple rounds where:
+# 1. Defender anonymizes text to protect privacy
+# 2. Attacker attempts to infer PII from anonymized text
+# 3. Evaluator scores both privacy protection and text utility
+# 4. Defender improves based on attack feedback
+#
+# This continues until privacy is protected or max rounds reached.
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 4
+
+task_config:
+    # Input profiles with base inferences
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/adversarial/deepseek"
+    offset: 0
+    num_profiles: 100
+
+    # Defender: DeepSeek-V3 (deepseek-chat)
+    # Strong, cost-effective model for anonymization
+    anonymizer:
+      anon_type: "adversarial_llm"
+      target_mode: "single"
+      max_workers: 4
+      prompt_level: 3
+      replacement_type: "generalize"
+
+    # Defender model configuration
+    anon_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    # Attacker: DeepSeek-R1 (deepseek-reasoner)
+    # Advanced reasoning model for sophisticated attacks
+    attack_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.2,  # Slightly higher for exploration
+        max_tokens: 2000,
+      }
+
+    # Evaluator: DeepSeek-V3 (deepseek-chat)
+    # Same as defender for consistent evaluation
+    evaluator_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.0,  # Deterministic for evaluation
+        max_tokens: 2000,
+      }
+
+    # Alias for utility model (same as evaluator)
+    utility_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # Adversarial loop settings
+    max_rounds: 5  # Maximum anonymization rounds per profile
+    stop_threshold:
+      privacy: 0.9  # Stop if privacy score >= 0.9
+      utility: 0.7  # And utility >= 0.7
+    min_utility_threshold: 0.3  # Stop if utility drops below this
+
+    # Evaluation settings
+    run_eval_inference: true
+    eval_inference_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+
+    # Profile filter
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+# General model (not used in adversarial mode, but required by config)
+gen_model:
+  name: "deepseek-chat"
+  provider: "deepseek"
+  args: {
+    temperature: 0.1,
+  }
