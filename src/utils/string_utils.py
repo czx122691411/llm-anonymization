@@ -5,14 +5,24 @@ import ast
 import hashlib
 import tiktoken
 from typing import List, Union, Tuple
-from sentence_transformers import SentenceTransformer
 
 from rouge_score import rouge_scorer
 from nltk.translate import bleu
 from nltk.translate.bleu_score import SmoothingFunction
 
 
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+_model = None
+
+def _get_model():
+    global _model
+    if _model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        except Exception as e:
+            print(f"Warning: Could not load SentenceTransformer model: {e}")
+            _model = "unavailable"
+    return _model
 
 
 def get_norm_vector(vector):
@@ -100,7 +110,10 @@ def select_closest(
         elif dist == "levenshtein":
             sim = Levenshtein.distance(input_str, t_str)
         elif dist == "embed":
-            input_embed, t_embed = model.encode([input_str, t_str])
+            m = _get_model()
+            if m == "unavailable" or m is None:
+                raise ValueError("SentenceTransformer model not available")
+            input_embed, t_embed = m.encode([input_str, t_str])
             sim = cosine_similarity(input_embed, t_embed)
         elif dist == "bleu":
             sim = bleu(

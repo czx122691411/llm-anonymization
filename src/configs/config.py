@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel as PBM
 from pydantic import Extra, Field
@@ -379,7 +379,7 @@ class Config(PBM):
     task: Task = Field(
         default=None, description="Task to run", choices=list(Task.__members__.values())
     )
-    task_config: AnonymizationConfig | REDDITConfig = Field(
+    task_config: Union[AnonymizationConfig, REDDITConfig] = Field(
         default=None, description="Config for the task"
     )
     gen_model: ModelConfig = Field(

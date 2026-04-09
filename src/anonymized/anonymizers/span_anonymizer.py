@@ -299,7 +299,7 @@ class SpanAnonymizer(Anonymizer):
 
         else:
             # Default to asterisk
-            return "[" + "".join(["*" for _ in range(len(entity.text))}) + "]"
+            return "[" + "".join(["*" for _ in range(len(entity.text))]) + "]"
 
     def _generalize_entity(self, entity: EntitySpan) -> str:
         """

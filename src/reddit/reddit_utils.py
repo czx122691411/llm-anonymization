@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Dict, Any
 from src.reddit.reddit_types import Comment, Profile, AnnotatedComments
 
 
@@ -94,7 +94,7 @@ def type_to_str(pii_type: str) -> str:
     return pii_type_str
 
 
-def map_synthpai_to_pii(synthpair: dict[str, any]) -> str:
+def map_synthpai_to_pii(synthpair: Dict[str, Any]) -> str:
     mapped_feature = {
         "income_level": "income",
         "age": "age",

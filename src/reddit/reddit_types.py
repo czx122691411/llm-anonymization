@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional, TextIO
 from datetime import datetime
+from typing import List, Dict, Any, Optional, TextIO, Union
 import hashlib
 import json
 
@@ -122,7 +123,7 @@ class Profile:
     def __init__(
         self,
         username: str,
-        annotated_comments: List[AnnotatedComments] | List[Comment],
+        annotated_comments: Union[List[AnnotatedComments], List[Comment]],
         review_pii: Optional[Dict[str, Dict[str, Any]]] = None,
         predictions: Optional[Dict[str, Dict[str, Any]]] = None,
         evaluations: Optional[Dict[str, Dict[str, Dict[str, List[int]]]]] = None,
@@ -194,7 +195,7 @@ class Profile:
 
         return relevant_pii_types
 
-    def update_span_pii(self, to_remove: list[str]) -> None:
+    def update_span_pii(self, to_remove: List[str]) -> None:
         for pii_type in to_remove:
             self.span_pii.remove(pii_type)
 
