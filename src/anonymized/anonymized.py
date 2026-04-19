@@ -6,7 +6,12 @@ import textwrap
 
 from src.models.model import BaseModel
 from src.configs import AnonymizationConfig, Config
-from src.models.model_factory import get_model
+
+# Import get_model only when needed to avoid transformers dependency
+def get_model_factory():
+    from src.models.model_factory import get_model
+    return get_model
+
 from src.reddit.reddit_utils import load_data
 from src.reddit.reddit_types import Profile, AnnotatedComments, Comment
 from src.reddit.eval import evaluate
@@ -395,11 +400,13 @@ def get_unfinished_profiles(profiles: List[Profile], max_count: int) -> List[Pro
 
 
 def run_anonymized(cfg: Config) -> None:
+    get_model = get_model_factory()
     inf_model = get_model(cfg.task_config.inference_model)
     util_model = get_model(cfg.task_config.utility_model)
     anonymizer = get_anonymizer(cfg.task_config)
     if cfg.task_config.eval_inference_model is not None:
-        eval_model = get_model(cfg.task_config.eval_inference_model)
+        get_model = get_model_factory()
+    eval_model = get_model(cfg.task_config.eval_inference_model)
 
     assert isinstance(cfg.task_config, AnonymizationConfig)
     profiles = load_profiles(cfg.task_config)
@@ -471,6 +478,7 @@ def run_eval_inference(cfg: Config) -> None:
         cfg (Config): _description_
     """
 
+    get_model = get_model_factory()
     eval_model = get_model(cfg.task_config.eval_inference_model)
     assert isinstance(cfg.task_config, AnonymizationConfig)
     profiles = load_data(cfg.task_config.profile_path)
@@ -549,6 +557,7 @@ def run_utility_scoring(cfg: Config) -> None:
         cfg (Config): _description_
     """
 
+    get_model = get_model_factory()
     utility_model = get_model(cfg.task_config.utility_model)
     assert isinstance(cfg.task_config, AnonymizationConfig)
     profiles = load_data(cfg.task_config.profile_path)

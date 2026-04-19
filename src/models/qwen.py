@@ -1,18 +1,10 @@
 from typing import List, Dict, Tuple, Iterator
-import os
 
-import openai
-import time
+import dashscope
+from dashscope import Generation
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-try:
-    # openai >= 1.0.0
-    from openai import RateLimitError
-    from openai import OpenAI
-except ImportError:
-    # openai < 1.0.0
-    from openai.error import RateLimitError
-    OpenAI = None
+import time
 
 from src.configs import ModelConfig
 from src.prompts import Prompt, Conversation
@@ -20,19 +12,21 @@ from src.prompts import Prompt, Conversation
 from .model import BaseModel
 
 
-class DeepSeekModel(BaseModel):
-    """DeepSeek API model using OpenAI-compatible interface.
+class QwenModel(BaseModel):
+    """Qwen API model using Alibaba DashScope interface.
 
     Supports:
-    - deepseek-chat (DeepSeek-V3.2)
-    - deepseek-reasoner (DeepSeek-R1)
+    - qwen-turbo (Fast, cost-effective)
+    - qwen-plus (Balanced performance)
+    - qwen-max (Highest capability)
     """
 
     # Map for lookup name -> actual API model name
     MODEL_MAP = {
-        "gpt-4-1106-preview": "deepseek-chat",
-        "deepseek-chat": "deepseek-chat",
-        "deepseek-reasoner": "deepseek-reasoner",
+        "qwen-turbo": "qwen-turbo",
+        "qwen-plus": "qwen-plus",
+        "qwen-max": "qwen-max",
+        "qwen-max-longcontext": "qwen-max-longcontext",
     }
 
     def __init__(self, config: ModelConfig):
@@ -48,51 +42,23 @@ class DeepSeekModel(BaseModel):
         if "max_tokens" not in self.config.args.keys():
             self.config.args["max_tokens"] = 2000
 
-        # Initialize client for openai >= 1.0.0
-        if OpenAI is not None:
-            # Get API key from environment or config
-            api_key = os.environ.get("DEEPSEEK_API_KEY")
-            if not api_key and "api_key" in self.config.args:
-                api_key = self.config.args["api_key"]
-
-            if not api_key:
-                raise ValueError("DEEPSEEK_API_KEY not found in environment or config")
-
-            self.client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.deepseek.com"
-            )
-            self.use_new_api = True
-        else:
-            # Fallback for openai < 1.0.0
-            api_key = os.environ.get("DEEPSEEK_API_KEY")
-            if not api_key and "api_key" in self.config.args:
-                api_key = self.config.args["api_key"]
-
-            if not api_key:
-                raise ValueError("DEEPSEEK_API_KEY not found in environment or config")
-
-            openai.api_key = api_key
-            openai.api_base = "https://api.deepseek.com"
-            self.use_new_api = False
+        # Configure API key if provided in args
+        if "api_key" in self.config.args.keys():
+            dashscope.api_key = self.config.args["api_key"]
 
     def _predict_call(self, input: List[Dict[str, str]]) -> str:
-        if self.use_new_api:
-            # openai >= 1.0.0
-            response = self.client.chat.completions.create(
-                model=self.api_model_name,
-                messages=input,
-                **self.config.args
-            )
-            return response.choices[0].message.content
-        else:
-            # openai < 1.0.0
-            response = openai.ChatCompletion.create(
-                model=self.api_model_name,
-                messages=input,
-                **self.config.args
-            )
-            return response["choices"][0]["message"]["content"]
+        """Make a single API call to Qwen"""
+        response = Generation.call(
+            model=self.api_model_name,
+            messages=input,
+            result_format='message',
+            **self.config.args
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Qwen API error: {response.code} - {response.message}")
+
+        return response.output.choices[0]['message']['content']
 
     def predict(self, input: Prompt, **kwargs) -> str:
         messages: List[Dict[str, str]] = []
@@ -163,11 +129,12 @@ class DeepSeekModel(BaseModel):
                         ids_to_do.remove(id)
                 except TimeoutError:
                     print(f"Timeout: {len(ids_to_do)} prompts remaining")
-                except RateLimitError as r:
-                    print(f"Rate_limit {r}")
-                    time.sleep(30)
-                    continue
                 except Exception as e:
+                    # Handle rate limiting or other errors
+                    if "rate limit" in str(e).lower() or "429" in str(e):
+                        print(f"Rate limit error: {e}")
+                        time.sleep(30)
+                        continue
                     print(f"Exception: {e}")
                     time.sleep(10)
                     continue
@@ -201,8 +168,11 @@ class DeepSeekModel(BaseModel):
         while guess is None:
             try:
                 guess = self._predict_call(input_list)
-            except RateLimitError as r:
-                time.sleep(30)
+            except Exception as e:
+                if "rate limit" in str(e).lower() or "429" in str(e):
+                    time.sleep(30)
+                    continue
+                time.sleep(10)
                 continue
 
         return guess

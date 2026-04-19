@@ -1,0 +1,74 @@
+# 异构对抗匿名化测试配置
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 4
+
+task_config:
+    # 基本路径配置
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/heterogeneous_test"
+    offset: 0
+    num_profiles: 5  # 先用5个profiles测试
+
+    # 匿名化配置
+    anonymizer:
+      anon_type: "llm"  # 使用基本LLM模式
+      target_mode: "single"
+      max_workers: 4
+
+    # 防御者模型: qwen-plus
+    anon_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    # 攻击者模型: deepseek-reasoner (作为inference_model)
+    inference_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.2,
+        max_tokens: 2000,
+      }
+
+    # 评估者模型: qwen-max (作为utility_model)
+    utility_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 其他配置
+    run_eval_inference: true
+    eval_inference_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+    max_num_iterations: 5
+    use_ner: false
+
+# 通用模型 (gen_model)
+gen_model:
+  name: "qwen-plus"
+  provider: "qwen"
+  args: {
+    temperature: 0.1,
+  }

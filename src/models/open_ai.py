@@ -4,7 +4,12 @@ import openai
 import time
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from openai.error import RateLimitError
+try:
+    # openai >= 1.0.0
+    from openai import RateLimitError
+except ImportError:
+    # openai < 1.0.0
+    from openai.error import RateLimitError
 
 from src.configs import ModelConfig
 from src.prompts import Prompt, Conversation

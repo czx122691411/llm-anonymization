@@ -7,12 +7,20 @@ from src.utils.initialization import (
     get_out_file,
 )
 from src.configs import *
-from src.reddit.reddit import run_reddit
-from src.anonymized.anonymized import (
-    run_anonymized,
-    run_eval_inference,
-    run_utility_scoring,
-)
+
+# Import these only when needed to avoid transformers dependency
+def get_reddit_module():
+    from src.reddit.reddit import run_reddit
+    return run_reddit
+
+def get_anonymized_module():
+    from src.anonymized.anonymized import (
+        run_anonymized,
+        run_eval_inference,
+        run_utility_scoring,
+    )
+    return run_anonymized, run_eval_inference, run_utility_scoring
+
 from src.anonymized.adversarial import run_adversarial_anonymization
 
 if __name__ == "__main__":
@@ -34,19 +42,37 @@ if __name__ == "__main__":
     try:
         print(cfg)
         if cfg.task == Task.REDDIT:
+            run_reddit = get_reddit_module()
             run_reddit(cfg)
         elif cfg.task == Task.ANONYMIZED:
+            run_anonymized, run_eval_inference, run_utility_scoring = get_anonymized_module()
             if cfg.task_config.run_eval_inference:
                 run_eval_inference(cfg)
             elif cfg.task_config.run_utility_scoring:
                 run_utility_scoring(cfg)
             elif cfg.task_config.anonymizer.anon_type in ["adversarial_llm", "span_llm"]:
                 # Adversarial mode - run adversarial loop
-                from src.models.model_factory import get_model
+                # Use modular provider registry to avoid transformers dependency
+                from src.models.providers.registry import get_registry
 
-                defender = get_model(cfg.task_config.anon_model)
-                attacker = get_model(cfg.task_config.attack_model)
-                evaluator = get_model(cfg.task_config.evaluator_model)
+                registry = get_registry(region="china")
+
+                # Create model instances using registry
+                defender = registry.create_model_instance(
+                    cfg.task_config.anon_model.name,
+                    **cfg.task_config.anon_model.args
+                )
+                attacker = registry.create_model_instance(
+                    cfg.task_config.attack_model.name,
+                    **cfg.task_config.attack_model.args
+                )
+                evaluator = registry.create_model_instance(
+                    cfg.task_config.evaluator_model.name,
+                    **cfg.task_config.evaluator_model.args
+                )
+
+                if not all([defender, attacker, evaluator]):
+                    raise ValueError("Failed to create model instances. Check API keys and model names.")
 
                 # Load profiles
                 from src.anonymized.anonymized import load_profiles
@@ -89,6 +115,7 @@ if __name__ == "__main__":
 
                 print(f"Adversarial anonymization results saved to {output_path}")
             else:
+                run_anonymized, _, _ = get_anonymized_module()
                 run_anonymized(cfg)
         else:
             raise NotImplementedError(f"Task {cfg.task} not implemented")

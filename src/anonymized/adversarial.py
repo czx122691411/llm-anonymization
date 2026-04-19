@@ -16,7 +16,10 @@ from tqdm import tqdm
 
 from src.configs import AnonymizationConfig
 from src.models.model import BaseModel
-from src.models.model_factory import get_model
+# Import get_model only when needed to avoid transformers dependency
+def get_model_factory():
+    from src.models.model_factory import get_model
+    return get_model
 from src.reddit.reddit_types import Profile
 from src.prompts import Prompt
 

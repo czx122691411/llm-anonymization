@@ -1,0 +1,109 @@
+# 异构对抗匿名化配置 (Heterogeneous Adversarial Anonymization Configuration)
+#
+# 此配置使用异构模型组合进行对抗匿名化：
+# - 防御者 (anonymizer): qwen-plus (高性价比，平衡性能)
+# - 攻击者: deepseek-reasoner (强推理能力，善于攻击)
+# - 评估者: qwen-max (最强综合能力，准确评估)
+#
+# 系统运行多轮对抗训练：
+# 1. 防御者匿名化文本以保护隐私
+# 2. 攻击者尝试从匿名化文本中推断个人信息
+# 3. 评估者对隐私保护和文本效用进行评分
+# 4. 防御者根据攻击反馈改进匿名化
+#
+# 持续进行直到隐私得到保护或达到最大轮数。
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 4
+
+task_config:
+    # 输入profiles路径
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/adversarial/heterogeneous_qwen_deepseek"
+    offset: 0
+    num_profiles: 10  # 先用少量profiles测试
+
+    # 防御者配置
+    anonymizer:
+      anon_type: "adversarial_llm"
+      target_mode: "single"
+      max_workers: 4
+      prompt_level: 3
+      replacement_type: "generalize"
+
+    # 防御者模型: qwen-plus
+    # 高性价比模型，平衡性能和成本
+    anon_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,  # 低温度以保持一致性
+        max_tokens: 2000,
+      }
+
+    # 攻击者模型: deepseek-reasoner
+    # 强推理能力模型，善于进行复杂攻击
+    attack_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.2,  # 稍高温度以探索多种攻击策略
+        max_tokens: 2000,
+      }
+
+    # 评估者模型: qwen-max
+    # 最强综合能力，提供准确评估
+    evaluator_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,  # 确定性评估
+        max_tokens: 2000,
+      }
+
+    # 效用评估模型 (与评估者相同)
+    utility_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 对抗循环设置
+    max_rounds: 5  # 每个profile的最大匿名化轮数
+    stop_threshold:
+      privacy: 0.9  # 隐私得分 >= 0.9 时停止
+      utility: 0.7  # 且效用得分 >= 0.7
+    min_utility_threshold: 0.3  # 效用低于此值时停止
+
+    # 评估设置
+    run_eval_inference: true
+    eval_inference_model:
+      name: "qwen-plus"  # 使用qwen-plus进行推理评估
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+
+    # Profile过滤器
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+# 通用模型 (在对抗模式中不使用，但配置需要)
+gen_model:
+  name: "qwen-plus"
+  provider: "qwen"
+  args: {
+    temperature: 0.1,
+  }
