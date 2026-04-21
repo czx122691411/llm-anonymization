@@ -1,0 +1,89 @@
+# 传统匿名化：Presidio + 规则
+# 基于NER和规则的隐私保护
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 2
+
+task_config:
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/traditional/synthetic_presidio"
+    offset: 0
+    num_profiles: 10
+
+    # 传统Presidio匿名化
+    anonymizer:
+      anon_type: "span_llm"  # 使用Span检测+LLM
+      target_mode: "single"
+      max_workers: 2
+      prompt_level: 1
+      replacement_type: "replace"
+
+    # 使用通用模型进行Presidio处理
+    anon_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 攻击者：强推理模型
+    attack_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.2,
+        max_tokens: 2000,
+      }
+
+    # 评估者
+    evaluator_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    utility_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 传统方法不需要多轮对抗
+    max_rounds: 1
+    stop_threshold:
+      privacy: 0.8
+      utility: 0.8
+    min_utility_threshold: 0.5
+
+    run_eval_inference: true
+    eval_inference_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+gen_model:
+  name: "qwen-plus"
+  provider: "qwen"
+  args: {
+    temperature: 0.0,
+  }

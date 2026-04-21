@@ -1,0 +1,33 @@
+# Core dependencies
+langdetect
+tqdm
+openai>=1.0.0
+pyyaml
+pydantic>=2.0.0
+python-levenshtein
+tiktoken
+regex
+
+# LLM providers
+dashscope
+# DeepSeek uses OpenAI SDK
+
+# Data processing
+pandas
+numpy
+
+# Optional: visualization
+matplotlib
+seaborn
+
+# Optional: NLP
+transformers
+tokenizers>=0.13.3
+
+# Optional: web scraping
+selenium
+selenium-stealth
+xmltodict
+
+# Testing
+pytest

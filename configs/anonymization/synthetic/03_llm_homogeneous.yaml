@@ -1,0 +1,87 @@
+# LLM同构对抗：所有角色使用相同模型
+# 防御者、攻击者、评估者都用qwen-plus
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 2
+
+task_config:
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/llm_homogeneous/synthetic_qwen"
+    offset: 0
+    num_profiles: 10
+
+    # LLM对抗匿名化
+    anonymizer:
+      anon_type: "adversarial_llm"
+      target_mode: "single"
+      max_workers: 2
+      prompt_level: 3
+      replacement_type: "generalize"
+
+    # 同构模型：所有角色都用qwen-plus
+    anon_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    attack_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.2,
+        max_tokens: 2000,
+      }
+
+    evaluator_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    utility_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 对抗循环
+    max_rounds: 3
+    stop_threshold:
+      privacy: 0.85
+      utility: 0.65
+    min_utility_threshold: 0.3
+
+    run_eval_inference: true
+    eval_inference_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+gen_model:
+  name: "qwen-plus"
+  provider: "qwen"
+  args: {
+    temperature: 0.1,
+  }

@@ -1,0 +1,89 @@
+# 基线实验：无匿名化
+# 用于评估原始文本的隐私泄露风险
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 2
+
+task_config:
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "results/baseline/synthetic_no_anonymization"
+    offset: 0
+    num_profiles: 10
+
+    # 无匿名化 - 直接使用原始文本
+    anonymizer:
+      anon_type: "llm"
+      target_mode: "single"
+      max_workers: 2
+      prompt_level: 0  # 无匿名化提示
+      replacement_type: "none"
+
+    # 使用弱模型进行基线测试
+    anon_model:
+      name: "qwen-turbo"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 攻击者配置
+    attack_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.2,
+        max_tokens: 2000,
+      }
+
+    # 评估者配置
+    evaluator_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    utility_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        temperature: 0.0,
+        max_tokens: 2000,
+      }
+
+    # 单轮评估
+    max_rounds: 1
+    stop_threshold:
+      privacy: 1.0
+      utility: 1.0
+    min_utility_threshold: 0.0
+
+    run_eval_inference: true
+    eval_inference_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2000,
+      }
+
+    run_utility_scoring: true
+
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+gen_model:
+  name: "qwen-turbo"
+  provider: "qwen"
+  args: {
+    temperature: 0.0,
+  }
