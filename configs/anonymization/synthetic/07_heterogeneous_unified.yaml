@@ -1,0 +1,93 @@
+# 异构对抗训练 - 统一评估标准
+# 使用UnifiedPrivacyEvaluator确保评估一致性
+
+output_dir: "results"
+seed: 42
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 0.0
+max_workers: 2
+
+task_config:
+    profile_path: "data/base_inferences/synthetic/inference_0.jsonl"
+    outpath: "anonymized_results/synthetic/heterogeneous_unified"
+    offset: 0
+    num_profiles: 263
+
+    # 异构对抗匿名化
+    anonymizer:
+      anon_type: "adversarial_llm"
+      target_mode: "single"
+      max_workers: 2
+      prompt_level: 3
+      replacement_type: "generalize"
+
+    # 防御者：qwen-plus
+    anon_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        "temperature": 0.1,
+        "max_tokens": 2000,
+      }
+
+    # 攻击者：deepseek-reasoner (与同构相同)
+    attack_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        "temperature": 0.2,
+        "max_tokens": 2000,
+      }
+
+    # 评估者：使用统一评估标准
+    evaluator_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        "temperature": 0.0,
+        "max_tokens": 2000,
+      }
+
+    # 使用统一评估器
+    use_unified_evaluator: true
+    unified_evaluator_path: "src/evaluation/unified_privacy_evaluator.py"
+
+    utility_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        "temperature": 0.0,
+        "max_tokens": 2000,
+      }
+
+    # 对抗循环参数
+    max_rounds: 3
+    stop_threshold:
+      privacy: 0.8
+      utility: 0.6
+    min_utility_threshold: 0.3
+
+    run_eval_inference: true
+    eval_inference_model:
+      name: "qwen-max"
+      provider: "qwen"
+      args: {
+        "temperature": 0.1,
+        "max_tokens": 2000,
+      }
+
+    run_utility_scoring: true
+
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 1000
+
+gen_model:
+  name: "qwen-plus"
+  provider: "qwen"
+  args: {
+    "temperature": 0.1,
+  }
