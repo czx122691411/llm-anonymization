@@ -1,0 +1,116 @@
+# TRACE-RPS Unified Anonymization Configuration
+#
+# This configuration combines TRACE (fine-grained anonymization) and RPS (reasoning prevention)
+# for comprehensive defense against attribute inference attacks.
+#
+# Based on TRACE-RPS (ICLR 2026)
+
+task: ANONYMIZED
+task_config:
+  profile_path: data/synthetic/profiles.jsonl
+  outpath: results/trace_rps_unified/
+  num_profiles: 100
+  offset: 0
+
+  # Anonymization model (defense)
+  anon_model:
+    name: qwen-plus
+    provider: qwen
+    max_workers: 4
+    args:
+      temperature: 0.1
+      max_tokens: 2000
+
+  # Utility evaluation model
+  utility_model:
+    name: qwen-plus
+    provider: qwen
+    max_workers: 4
+    args:
+      temperature: 0.1
+      max_tokens: 1000
+
+  # Attack model (for adversarial testing)
+  attack_model:
+    name: deepseek-reasoner
+    provider: deepseek
+    max_workers: 2
+    args:
+      temperature: 0.3
+      max_tokens: 1000
+
+  # Evaluator model
+  evaluator_model:
+    name: qwen-max
+    provider: qwen
+    max_workers: 2
+    args:
+      temperature: 0.1
+      max_tokens: 2000
+
+  # Anonymizer configuration
+  anonymizer:
+    anon_type: trace_rps  # Use TRACE-RPS unified defense
+    max_workers: 4
+    prompt_level: 3
+
+  # Adversarial configuration
+  max_rounds: 3
+  stop_threshold:
+    privacy: 0.90
+    utility: 0.70
+
+  # TRACE configuration
+  trace:
+    enabled: true
+    analyzer_model: qwen-max
+    use_attention: false  # Set to true if transformers available
+    attention_threshold: 0.3
+    cot_depth: 3
+    privacy_attributes:
+      - age
+      - gender
+      - location
+      - occupation
+      - relationship_status
+      - income
+      - education
+      - health
+
+  # RPS configuration
+  rps:
+    enabled: true
+    defender_model: qwen-plus
+    attacker_model: deepseek-reasoner
+    beta: 5.0  # Weight for second token optimization
+    max_iterations: 100
+    early_stop_patience: 10
+
+  # Evaluation settings
+  run_eval_inference: true
+  run_utility_scoring: true
+
+  # Profile filter
+  profile_filter:
+    min_comments: 3
+    max_comments: 50
+
+  # System prompt for defense
+  system_prompt: "You are a privacy protection assistant. Your goal is to anonymize text to protect personal privacy while preserving as much utility as possible."
+
+gen_model:
+  name: qwen-plus
+  provider: qwen
+  max_workers: 4
+  args:
+    temperature: 0.1
+    max_tokens: 2000
+
+# Output settings
+output_dir: results/trace_rps_unified
+store: true
+save_prompts: false
+dryrun: false
+timeout: 0.5
+max_workers: 8
+seed: 42

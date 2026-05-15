@@ -38,7 +38,7 @@ interface AnonymizationRound {
   timestamp: string;
 }
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8001';
 
 export const AnonymizationDetail: React.FC = () => {
   const { profileId } = useParams<{ profileId: string }>();

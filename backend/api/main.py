@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from src.configs import AnonymizationConfig
 from .routes.anonymization import router as anon_router
+from .routes import unified  # Import unified routes
+from .routes import deepseek_training  # Import deepseek training routes
 
 # Initialize app
 app = FastAPI(
@@ -22,11 +24,19 @@ app = FastAPI(
 
 # Include routers - This adds routes from anonymization.py
 app.include_router(anon_router)
+app.include_router(unified.router)  # Add unified routes
+app.include_router(deepseek_training.router)  # Add deepseek training routes
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,11 +58,21 @@ async def root():
     return {
         "status": "healthy",
         "message": "LLM Anonymization Visualizer API",
+        "version": "1.0.0",
         "endpoints": {
             "profiles": "/api/profiles",
             "profile_detail": "/api/profiles/{profile_id}",
             "anonymization": "/api/anonymization/{profile_id}",
-            "quality": "/api/quality/{profile_id}"
+            "quality": "/api/quality/{profile_id}",
+            "unified": {
+                "sync": "/api/unified/anonymize/sync",
+                "async": "/api/unified/anonymize/async",
+                "task_status": "/api/unified/task/{task_id}",
+                "websocket": "/api/unified/progress/{task_id}",
+                "methods": "/api/unified/methods",
+                "attributes": "/api/unified/attributes",
+                "health": "/api/unified/health"
+            }
         }
     }
 

@@ -177,7 +177,7 @@ class AnonymizerConfig(PBM):
     anon_type: str = Field(
         default="span",
         description="Type of anonymizer to use",
-        choices=["span", "azure", "llm", "llm_base", "adversarial_llm", "span_llm"],
+        choices=["span", "azure", "llm", "llm_base", "adversarial_llm", "span_llm", "trace", "rps", "trace_rps"],
     )
     max_workers: int = Field(
         default=1,
@@ -216,7 +216,64 @@ class AnonymizerConfig(PBM):
     )
 
 
+class TRACEConfig(PBM):
+    """Configuration for TRACE anonymizer"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether to enable TRACE anonymization"
+    )
+    analyzer_model: Optional[str] = Field(
+        default="qwen-max",
+        description="Model to use for privacy analysis"
+    )
+    use_attention: bool = Field(
+        default=False,
+        description="Whether to use attention mechanisms for detection"
+    )
+    attention_threshold: float = Field(
+        default=0.3,
+        description="Threshold for attention-based detection"
+    )
+    cot_depth: int = Field(
+        default=3,
+        description="Depth of chain-of-thought reasoning"
+    )
+    privacy_attributes: List[str] = Field(
+        default_factory=lambda: ["age", "gender", "location", "occupation", "relationship_status"],
+        description="Privacy attributes to detect and anonymize"
+    )
+
+
+class RPSConfig(PBM):
+    """Configuration for RPS optimizer"""
+    enabled: bool = Field(
+        default=False,
+        description="Whether to enable RPS optimization"
+    )
+    defender_model: Optional[str] = Field(
+        default="qwen-plus",
+        description="Model used for defense/generation"
+    )
+    attacker_model: Optional[str] = Field(
+        default="deepseek-reasoner",
+        description="Model used to simulate inference attacks"
+    )
+    beta: float = Field(
+        default=5.0,
+        description="Weight for second token optimization in Stage 2"
+    )
+    max_iterations: int = Field(
+        default=100,
+        description="Maximum optimization iterations"
+    )
+    early_stop_patience: int = Field(
+        default=10,
+        description="Patience for early stopping"
+    )
+
+
 class AnonymizationConfig(PBM):
+    """Merged anonymization configuration with TRACE-RPS support"""
     # Prompt Loading
     profile_path: str = Field(
         default=None,
@@ -265,64 +322,6 @@ class AnonymizationConfig(PBM):
     run_eval_inference: bool = Field(
         default=False, description="Whether to run evaluation inference"
     )
-    eval_inference_model: Optional[ModelConfig] = Field(
-        default=None, description="Model to use for evaluation inference"
-    )
-    anonymizer: AnonymizerConfig = Field(
-        default_factory=AnonymizerConfig,
-        description="Config for the anonymizer",
-    )
-
-    max_num_iterations: int = Field(
-        default=1,
-        description="Maximum number of iterations to run the anonymization for. We might stop earlier if we can no longer find a correct answer",
-    )
-    use_ner: bool = Field(
-        default=False,
-        description="Whether to use NER to find entities in the text",
-    )
-    profile_filter: Dict[str, int] = Field(
-        default_factory=dict,
-        description="Filter profiles based on comment statistics.",
-    )
-    system_prompt: Optional[str] = Field(
-        default=None, description="System prompt to use"
-    )
-    header: Optional[str] = Field(default=None, description="Prompt header to use")
-    footer: Optional[str] = Field(default=None, description="Prompt footer to use")
-
-
-class AnonymizationConfig(PBM):
-    # Prompt Loading
-    profile_path: str = Field(
-        default=None,
-        description="Path to a file containing profiles including comments",
-    )
-    offset: int = Field(
-        default=0,
-        description="Offset to start from in the profile file",
-    )
-    num_profiles: int = Field(
-        default=1000,
-        description="Number of profiles to use from the profile file",
-    )
-    outpath: str = Field(
-        default=None,
-        description="Path to a file to write the anonymized profiles to",
-    )
-    anon_model: Optional[ModelConfig] = Field(
-        default=None,
-        description="Model to use for anonymization, otherwise same as the generation model",
-    )
-    utility_model: Optional[ModelConfig] = Field(
-        default=None, description="Model to use for utility"
-    )
-    inference_model: Optional[ModelConfig] = Field(
-        default=None, description="Model to use for inference"
-    )
-    run_eval_inference: bool = Field(
-        default=False, description="Whether to run evaluation inference"
-    )
     run_utility_scoring: bool = Field(
         default=False, description="Whether to run utility scoring"
     )
@@ -343,13 +342,23 @@ class AnonymizationConfig(PBM):
         description="Whether to use NER to find entities in the text",
     )
     profile_filter: Dict[str, int] = Field(
-        default_factory=dict, description="Filter profiles based on comment statistics."
+        default_factory=dict, description="Filter profiles based on comment statistics.",
     )
     system_prompt: Optional[str] = Field(
         default=None, description="System prompt to use"
     )
     header: Optional[str] = Field(default=None, description="Prompt header to use")
     footer: Optional[str] = Field(default=None, description="Prompt footer to use")
+
+    ### TRACE-RPS Configuration
+    trace: TRACEConfig = Field(
+        default_factory=TRACEConfig,
+        description="TRACE anonymization configuration"
+    )
+    rps: RPSConfig = Field(
+        default_factory=RPSConfig,
+        description="RPS optimization configuration"
+    )
 
     def get_filename(self) -> str:
         file_path = "anon_"
