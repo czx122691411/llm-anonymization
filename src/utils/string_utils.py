@@ -3,6 +3,7 @@ import numpy as np
 import re
 import ast
 import hashlib
+import os
 import tiktoken
 from typing import List, Union, Tuple
 
@@ -17,8 +18,12 @@ def _get_model():
     global _model
     if _model is None:
         try:
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
             from sentence_transformers import SentenceTransformer
-            _model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+            _model = SentenceTransformer(
+                "sentence-transformers/all-MiniLM-L6-v2",
+                local_files_only=True,
+            )
         except Exception as e:
             print(f"Warning: Could not load SentenceTransformer model: {e}")
             _model = "unavailable"

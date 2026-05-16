@@ -1,3 +1,6 @@
+import os
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 from typing import List, Dict, Iterator, Tuple
 import torch
 from src.configs import ModelConfig

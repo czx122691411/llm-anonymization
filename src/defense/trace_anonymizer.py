@@ -7,9 +7,12 @@ and fine-grained anonymization for LLM-generated content.
 """
 
 import asyncio
+import os
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
+
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 try:
     from transformers import AutoTokenizer, AutoModelForCausalLM
