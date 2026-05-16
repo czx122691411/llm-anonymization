@@ -1,11 +1,16 @@
 /**
  * CustomTestPage - 自定义测试页面（增强版）
  *
- * 允许用户输入自己的文本进行匿名化测试，或选择预设示例
+ * 支持三种匿名化方法的实时迭代执行：
+ * - TRACE-RPS v2.0: 推理链阻断 + 迭代优化
+ * - 异构对抗训练: DeepSeek→Qwen
+ * - 同构对抗训练: DeepSeek→DeepSeek
+ *
+ * 通过WebSocket实时接收TRACE五步流程、迭代中间结果、RPS优化过程
  */
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Send,
@@ -18,6 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import {
   MethodConfigPanel,
@@ -25,16 +32,10 @@ import {
   SensitiveAttribute,
   ANONYMIZATION_METHODS,
 } from '../components/MethodConfigPanel';
-import {
-  ResultDisplay,
-  AnonymizationResult,
-} from '../components/ResultDisplay';
-import { AttackerInferenceView } from '../components/AttackerInferenceView';
-import { DefenderChangesView } from '../components/DefenderChangesView';
-import { AdversarialProcessView } from '../components/AdversarialProcessView';
+import { ResultDisplay } from '../components/ResultDisplay';
+import { ExecutionStepper } from '../components/ExecutionStepper';
+import { useAnonymizationWebSocket } from '../hooks/useAnonymizationWebSocket';
 import exampleTestCases from '../data/example-test-cases.json';
-
-const API_BASE = 'http://localhost:8001';
 
 interface ExampleCase {
   id: string;
@@ -54,26 +55,54 @@ interface ExampleCase {
 }
 
 export const CustomTestPage: React.FC = () => {
-  const navigate = useNavigate();
-
-  // 输入状态
+  // Input state
   const [inputText, setInputText] = useState('');
 
-  // 示例选择状态
+  // Example selection state
   const [showExamples, setShowExamples] = useState(false);
   const [selectedExample, setSelectedExample] = useState<ExampleCase | null>(null);
   const [expandedExample, setExpandedExample] = useState<string | null>(null);
 
-  // 配置状态
+  // Config state
   const [selectedMethod, setSelectedMethod] = useState<AnonymizationMethod>('trace_rps_v2');
   const [selectedAttributes, setSelectedAttributes] = useState<SensitiveAttribute[]>(['income', 'education']);
   const [iterations, setIterations] = useState(5);
   const [threshold, setThreshold] = useState(2);
 
-  // 处理状态
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnonymizationResult | null>(null);
+  // Execution state via WebSocket hook
+  const {
+    wsConnected,
+    status,
+    currentStep,
+    progress,
+    traceSteps,
+    rpsSteps,
+    iterations: iterResults,
+    result,
+    error,
+    submitTask,
+    cancelTask,
+    reset: resetExecution,
+  } = useAnonymizationWebSocket();
+
+  const isRunning = status === 'connecting' || status === 'running';
+  const isCompleted = status === 'completed';
+  const isFailed = status === 'failed';
+
+  // Detect demo mode (placeholder replacements)
+  const isDemoMode = useMemo(() => {
+    if (!result) return false;
+    const resultStr = JSON.stringify(result);
+    return (
+      resultStr.includes('[年龄]') ||
+      resultStr.includes('[收入]') ||
+      resultStr.includes('[城市]') ||
+      resultStr.includes('[职业]') ||
+      resultStr.includes('[大学]') ||
+      resultStr.includes('[地点]') ||
+      resultStr.includes('[金额]')
+    );
+  }, [result]);
 
   const handleSelectExample = (example: ExampleCase) => {
     setInputText(example.input_text);
@@ -83,99 +112,30 @@ export const CustomTestPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!inputText.trim()) {
-      setError('请输入要匿名化的文本');
-      return;
-    }
+    if (!inputText.trim()) return;
 
-    if (selectedAttributes.length === 0) {
-      setError('请至少选择一个保护属性');
-      return;
-    }
+    const requestBody = {
+      text: inputText,
+      method: selectedMethod,
+      config: {
+        target_attributes: selectedAttributes,
+        max_iterations: iterations,
+        certainty_threshold: threshold,
+        enable_rps: selectedMethod === 'trace_rps_v2',
+      },
+      options: {
+        enable_quality_metrics: true,
+        enable_inference_test: true,
+      },
+    };
 
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const requestBody = {
-        text: inputText,
-        method: selectedMethod,
-        config: {
-          target_attributes: selectedAttributes,
-          max_iterations: iterations,
-          certainty_threshold: threshold,
-        },
-        options: {
-          enable_quality_metrics: true,
-          enable_inference_test: true,
-        },
-      };
-
-      console.log('Sending request:', JSON.stringify(requestBody, null, 2));
-
-      const response = await fetch(`${API_BASE}/api/unified/anonymize/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-        console.error('API Error:', errorData);
-
-        // 处理 FastAPI 验证错误
-        if (Array.isArray(errorData.detail)) {
-          const messages = errorData.detail.map((err: any) => {
-            const field = err.loc?.join('.') || 'unknown';
-            return `${field}: ${err.msg}`;
-          });
-          throw new Error(messages.join(', '));
-        }
-
-        throw new Error(errorData.detail?.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status === 'completed' && data.result) {
-        const normalizedResult = {
-          ...data.result,
-          inference_tests: data.result.inference_test || [],
-        };
-
-        const isDemoMode =
-          JSON.stringify(normalizedResult).includes('No LLM client') ||
-          JSON.stringify(normalizedResult).includes('Demo mode') ||
-          normalizedResult.anonymized_text.includes('[');
-
-        setResult(normalizedResult);
-
-        if (isDemoMode) {
-          setError('⚠️ 演示模式：LLM客户端未配置，使用规则模拟。请配置API密钥以获得真实结果。');
-          setTimeout(() => setError(null), 5000);
-        }
-      } else if (data.status === 'failed') {
-        throw new Error(data.error?.message || '处理失败');
-      } else {
-        throw new Error(`意外的状态: ${data.status}`);
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '未知错误';
-      setError(`匿名化失败: ${errorMessage}`);
-      console.error('Anonymization error:', err);
-    } finally {
-      setLoading(false);
-    }
+    await submitTask(requestBody);
   };
 
   const handleReset = () => {
     setInputText('');
     setSelectedExample(null);
-    setResult(null);
-    setError(null);
+    resetExecution();
   };
 
   const getMethodLabel = () => {
@@ -202,15 +162,29 @@ export const CustomTestPage: React.FC = () => {
                 输入文本或选择示例进行匿名化处理
               </p>
             </div>
+            {/* WebSocket connection indicator */}
+            {isRunning && (
+              <div className="ml-auto flex items-center gap-2 text-xs">
+                {wsConnected ? (
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <Wifi className="w-3 h-3" /> 实时连接
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-amber-600">
+                    <WifiOff className="w-3 h-3" /> 轮询中
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 左侧：输入和配置 */}
+          {/* Left: Input and Config */}
           <div className="space-y-6">
-            {/* 示例选择 */}
+            {/* Example selector */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
               <button
                 onClick={() => setShowExamples(!showExamples)}
@@ -236,7 +210,7 @@ export const CustomTestPage: React.FC = () => {
 
               {showExamples && (
                 <div className="border-t border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
-                  {exampleTestCases.examples.map((example: ExampleCase) => (
+                  {(exampleTestCases as any).examples?.map((example: ExampleCase) => (
                     <div key={example.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                       <button
                         onClick={() => handleSelectExample(example)}
@@ -265,7 +239,6 @@ export const CustomTestPage: React.FC = () => {
                         </div>
                       </button>
 
-                      {/* 示例详情（可展开） */}
                       {selectedExample?.id === example.id && (
                         <div className="mt-3 pl-4 border-l-2 border-violet-200 dark:border-violet-800">
                           <button
@@ -313,7 +286,7 @@ export const CustomTestPage: React.FC = () => {
               )}
             </div>
 
-            {/* 文本输入 */}
+            {/* Text input */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
               <div className="flex items-center justify-between mb-4">
                 <label className="block text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -326,7 +299,7 @@ export const CustomTestPage: React.FC = () => {
                 )}
                 <button
                   onClick={handleReset}
-                  disabled={loading || !inputText}
+                  disabled={isRunning || !inputText}
                   className="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="清空"
                 >
@@ -338,7 +311,7 @@ export const CustomTestPage: React.FC = () => {
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="请输入要匿名化的文本...&#10;&#10;或者点击上方选择预设示例，查看不同类型PII的匿名化效果。"
                 className="w-full h-48 p-4 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
-                disabled={loading}
+                disabled={isRunning}
               />
               <div className="mt-2 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
                 <span>{inputText.length} 字符</span>
@@ -346,7 +319,7 @@ export const CustomTestPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 配置面板 */}
+            {/* Config panel */}
             <MethodConfigPanel
               selectedMethod={selectedMethod}
               onMethodChange={setSelectedMethod}
@@ -356,10 +329,10 @@ export const CustomTestPage: React.FC = () => {
               onIterationsChange={setIterations}
               threshold={threshold}
               onThresholdChange={setThreshold}
-              disabled={loading}
+              disabled={isRunning}
             />
 
-            {/* 算法差异说明 */}
+            {/* Algorithm comparison notes */}
             {selectedExample && selectedExample.algorithm_comparison && (
               <div className="bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-900/20 dark:to-violet-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-5">
                 <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
@@ -379,27 +352,28 @@ export const CustomTestPage: React.FC = () => {
               </div>
             )}
 
-            {/* 提交按钮 */}
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !inputText.trim()}
-              className="w-full py-4 bg-gradient-to-r from-violet-600 to-rose-600 hover:from-violet-700 hover:to-rose-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>处理中...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  <span>开始匿名化</span>
-                </>
-              )}
-            </button>
+            {/* Submit / Cancel button */}
+            {isRunning ? (
+              <button
+                onClick={cancelTask}
+                className="w-full py-4 bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3"
+              >
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>取消执行 ({Math.round(progress)}%)</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={!inputText.trim()}
+                className="w-full py-4 bg-gradient-to-r from-violet-600 to-rose-600 hover:from-violet-700 hover:to-rose-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              >
+                <Send className="w-5 h-5" />
+                <span>开始匿名化</span>
+              </button>
+            )}
 
-            {/* 错误提示 */}
-            {error && (
+            {/* Error alert */}
+            {error && !isRunning && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -409,8 +383,24 @@ export const CustomTestPage: React.FC = () => {
               </div>
             )}
 
-            {/* 成功提示 */}
-            {result && !error && (
+            {/* Demo mode warning */}
+            {isDemoMode && isCompleted && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium text-amber-900 dark:text-amber-100">
+                    ⚠️ 检测到占位符替换模式
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    匿名化结果包含 [年龄]、[城市] 等占位符，表明LLM客户端可能未正确配置。
+                    请检查API密钥配置和网络连接。
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Success indicator */}
+            {isCompleted && !error && (
               <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                 <p className="font-medium text-emerald-900 dark:text-emerald-100">
@@ -420,17 +410,28 @@ export const CustomTestPage: React.FC = () => {
             )}
           </div>
 
-          {/* 右侧：结果展示 */}
+          {/* Right: Results area */}
           <div>
-            {result ? (
+            {isRunning ? (
+              /* Real-time execution stepper */
+              <ExecutionStepper
+                traceSteps={traceSteps}
+                rpsSteps={rpsSteps}
+                iterations={iterResults}
+                currentStep={currentStep}
+                progress={progress}
+                wsConnected={wsConnected}
+                methodName={getMethodLabel()}
+              />
+            ) : result ? (
+              /* Completed: show final results */
               <div className="space-y-6">
-                {/* 快速概览 - 文本对比和质量评分 */}
+                {/* Quick overview */}
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">快速概览</h3>
                   </div>
                   <div className="p-6 space-y-4">
-                    {/* 文本对比 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -450,67 +451,109 @@ export const CustomTestPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* 质量评分卡片 */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      {result.quality_scores && (
-                        <>
-                          <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">隐私保护</p>
-                            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                              {result.quality_scores.privacy_protection.toFixed(0)}%
-                            </p>
-                          </div>
-                          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">效用保持</p>
-                            <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                              {result.quality_scores.utility_preservation.toFixed(0)}%
-                            </p>
-                          </div>
-                          <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">文本质量</p>
-                            <p className="text-xl font-bold text-violet-600 dark:text-violet-400">
-                              {result.quality_scores.text_quality.toFixed(0)}%
-                            </p>
-                          </div>
-                          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">推理阻止</p>
-                            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-                              {result.quality_scores.inference_blocking.toFixed(0)}%
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    {/* Quality scores */}
+                    {result.quality_scores && (
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">隐私保护</p>
+                          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                            {result.quality_scores.privacy_protection?.toFixed?.(0) || result.quality_scores.privacy_protection}%
+                          </p>
+                        </div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">效用保持</p>
+                          <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                            {result.quality_scores.utility_preservation?.toFixed?.(0) || result.quality_scores.utility_preservation}%
+                          </p>
+                        </div>
+                        <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">文本质量</p>
+                          <p className="text-xl font-bold text-violet-600 dark:text-violet-400">
+                            {result.quality_scores.text_quality?.toFixed?.(0) || result.quality_scores.text_quality}%
+                          </p>
+                        </div>
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">推理阻止</p>
+                          <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+                            {result.quality_scores.inference_blocking?.toFixed?.(0) || result.quality_scores.inference_blocking}%
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* 攻击者推理分析 */}
+                {/* Iteration history (if we have intermediate data) */}
+                {iterResults.length > 0 && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        执行过程（{iterResults.length}轮迭代）
+                      </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      {iterResults.map((iter) => (
+                        <IterationResultCard key={iter.iteration} iteration={iter} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* TRACE-RPS details (if present) */}
                 {result.trace_rps_details?.reasoning_chains && (
-                  <AttackerInferenceView
-                    reasoningChains={result.trace_rps_details.reasoning_chains}
-                    inferenceTests={result.inference_tests || []}
-                  />
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        推理链详情
+                      </h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      {result.trace_rps_details.reasoning_chains.map((chain: any, idx: number) => (
+                        <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+                              {chain.attribute}
+                            </span>
+                            <span className="text-xs text-slate-500">→</span>
+                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                              目标猜测: {chain.target_guess}
+                            </span>
+                            {chain.blocked && (
+                              <span className="text-xs px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded">
+                                已阻断
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            {chain.nodes?.map((node: any) => (
+                              <div key={node.id} className="text-xs flex gap-3">
+                                <span className={`
+                                  px-1.5 py-0.5 rounded flex-shrink-0
+                                  ${node.type === 'evidence' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : ''}
+                                  ${node.type === 'inference' ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300' : ''}
+                                  ${node.type === 'conclusion' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : ''}
+                                  ${node.type === 'blocked' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : ''}
+                                `}>
+                                  {node.type}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="text-slate-700 dark:text-slate-300">{node.text}</p>
+                                  {node.evidence && (
+                                    <p className="text-slate-500 dark:text-slate-500 mt-0.5">
+                                      📎 {node.evidence}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
-                {/* 防御者修改详情 */}
-                {(result.changes && result.changes.length > 0) && (
-                  <DefenderChangesView
-                    changes={result.changes}
-                    inferenceTests={result.inference_tests || []}
-                  />
-                )}
-
-                {/* 攻防对抗过程 */}
-                {result.trace_rps_details && (
-                  <AdversarialProcessView
-                    iterations={result.trace_rps_details.iterations}
-                    reasoningChains={result.trace_rps_details.reasoning_chains}
-                    inferenceTests={result.inference_tests || []}
-                    changes={result.changes || []}
-                  />
-                )}
-
-                {/* 详细指标（折叠） */}
+                {/* Detailed metrics (collapsible) */}
                 <details className="group">
                   <summary className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-6 py-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -523,6 +566,7 @@ export const CustomTestPage: React.FC = () => {
                 </details>
               </div>
             ) : (
+              /* Empty state */
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
                   <Send className="w-10 h-10 text-slate-400 dark:text-slate-600" />
@@ -544,6 +588,119 @@ export const CustomTestPage: React.FC = () => {
           </div>
         </div>
       </main>
+    </div>
+  );
+};
+
+/**
+ * IterationResultCard - Single iteration result display
+ */
+const IterationResultCard: React.FC<{
+  iteration: {
+    iteration: number;
+    before_text: string;
+    after_text: string;
+    inferences: Array<{ attribute: string; guess: string; certainty: number }>;
+    attention_words: string[];
+    improvements: string[];
+    certainty_before: number;
+    certainty_after: number;
+  };
+}> = ({ iteration: iter }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="w-7 h-7 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-sm font-bold flex items-center justify-center">
+            {iter.iteration}
+          </span>
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            第 {iter.iteration} 轮迭代
+          </span>
+          <span className="text-xs text-slate-500">
+            置信度: {iter.certainty_before} → {iter.certainty_after}
+          </span>
+          {iter.certainty_after <= iter.certainty_before && (
+            <span className="text-xs text-emerald-600 dark:text-emerald-400">↓ 降低</span>
+          )}
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-100 dark:border-slate-700 pt-3">
+          {/* Before/after text diff */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">本轮输入</label>
+              <div className="p-2 bg-red-50 dark:bg-red-900/10 rounded text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap line-clamp-4">
+                {iter.before_text}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">本轮输出</label>
+              <div className="p-2 bg-emerald-50 dark:bg-emerald-900/10 rounded text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap line-clamp-4">
+                {iter.after_text}
+              </div>
+            </div>
+          </div>
+
+          {/* Inferences */}
+          {iter.inferences.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">攻击者推断</label>
+              <div className="flex flex-wrap gap-2">
+                {iter.inferences.map((inf, idx) => (
+                  <span
+                    key={idx}
+                    className="text-xs px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded border border-red-100 dark:border-red-800"
+                  >
+                    {inf.attribute}: {inf.guess || '未知'} (确信度: {inf.certainty})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Attention words */}
+          {iter.attention_words.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">隐私关键词</label>
+              <div className="flex flex-wrap gap-1">
+                {iter.attention_words.map((word, idx) => (
+                  <span
+                    key={idx}
+                    className="text-xs px-2 py-0.5 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 rounded"
+                  >
+                    {word}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Improvements */}
+          {iter.improvements.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">改动说明</label>
+              <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                {iter.improvements.map((imp, idx) => (
+                  <li key={idx}>{imp}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

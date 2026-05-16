@@ -175,6 +175,41 @@ class AnonymizationResult(BaseModel):
     adversarial_details: Optional[Dict[str, Any]] = None
 
 
+class IterationIntermediate(BaseModel):
+    """单次迭代的中间结果（WebSocket实时推送）"""
+    iteration: int
+    before_text: str
+    after_text: str
+    inferences: List[Dict[str, Any]] = Field(default_factory=list, description="攻击者推断结果")
+    attention_words: List[str] = Field(default_factory=list, description="注意力定位的隐私关键词")
+    leakage_chains: List[ReasoningChain] = Field(default_factory=list, description="隐私泄露链")
+    improvements: List[str] = Field(default_factory=list, description="本轮的改动说明")
+    certainty_before: float = 0
+    certainty_after: float = 0
+
+
+class TRACEStepDetail(BaseModel):
+    """TRACE五步流程中单步的详细数据"""
+    step: int = Field(ge=1, le=5)
+    step_name: str  # "模拟攻击" / "注意力提取" / "推理链生成" / "关键节点定位" / "精细改写"
+    description: str
+    status: str  # "pending" / "running" / "completed" / "failed"
+    detail: Optional[Dict[str, Any]] = None  # 步特定的数据
+
+
+class RPSStepDetail(BaseModel):
+    """RPS防御优化单次尝试的数据"""
+    stage: int  # 1 or 2
+    attempt: int
+    current_suffix: str
+    tried_suffix: str
+    probability: float = 0  # P("I") for stage 1, combined score for stage 2
+    probability_before: float = 0
+    probability_after: float = 0
+    accepted: bool = False
+    stopping_condition_met: bool = False
+
+
 class TaskProgress(BaseModel):
     """任务进度"""
     current_step: int
@@ -183,6 +218,10 @@ class TaskProgress(BaseModel):
     step_progress: float = Field(ge=0, le=100, description="当前步骤进度百分比")
     estimated_time_remaining: float = Field(description="预计剩余时间（秒）")
     message: Optional[str] = None
+    # 中间结果（WebSocket推送时携带）
+    intermediate: Optional[IterationIntermediate] = None
+    trace_step: Optional[TRACEStepDetail] = None
+    rps_step: Optional[RPSStepDetail] = None
 
 
 class AnonymizationRequest(BaseModel):

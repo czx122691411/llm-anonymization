@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 import os
 import json
 import re
@@ -174,7 +174,7 @@ def anonymize(
                 f.flush()
 
 
-def parse_utility_answer(answer_str: str) -> Dict[str, Dict[str, str | int]]:
+def parse_utility_answer(answer_str: str) -> Dict[str, Dict[str, Union[str, int]]]:
     # try to load object as json
     try:
         start = answer_str.find("{")

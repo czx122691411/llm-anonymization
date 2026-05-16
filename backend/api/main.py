@@ -6,6 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load .env file before any other imports that may need API keys
+load_dotenv(os.path.join(os.path.dirname(__file__), '../../.env'))
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))

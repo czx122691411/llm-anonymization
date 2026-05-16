@@ -1,5 +1,10 @@
 import argparse
 import sys
+
+# Load .env file before anything else
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.utils.initialization import (
     read_config_from_yaml,
     seed_everything,

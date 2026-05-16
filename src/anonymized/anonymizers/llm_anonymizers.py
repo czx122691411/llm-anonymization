@@ -39,9 +39,14 @@ class LLMFullAnonymizer(Anonymizer):
 
         comments = profile.get_latest_comments().comments
         comment_string = "\n".join([str(c) for c in comments])
-        previous_inferences = profile.get_latest_comments().predictions[
-            self.model.config.name
-        ]
+        # Use predictions from the model that generated them (could be different from anon_model)
+        predictions_dict = profile.get_latest_comments().predictions
+        if self.model.config.name in predictions_dict:
+            previous_inferences = predictions_dict[self.model.config.name]
+        else:
+            # Fallback: use any available prediction key
+            available_keys = [k for k in predictions_dict if k != "full_answer"]
+            previous_inferences = predictions_dict[available_keys[0]] if available_keys else {}
         inference_string = ""
         try:
             for key, inf in previous_inferences.items():
@@ -196,9 +201,12 @@ class LLMBaselineAnonymizer(LLMFullAnonymizer):
 
         comments = profile.get_latest_comments().comments
         comment_string = "\n".join([str(c) for c in comments])
-        previous_infereces = profile.get_latest_comments().predictions[
-            self.model.config.name
-        ]
+        predictions_dict = profile.get_latest_comments().predictions
+        if self.model.config.name in predictions_dict:
+            previous_infereces = predictions_dict[self.model.config.name]
+        else:
+            available_keys = [k for k in predictions_dict if k != "full_answer"]
+            previous_infereces = predictions_dict[available_keys[0]] if available_keys else {}
 
         intermediate = f"\n\n {comment_string}\n"
 

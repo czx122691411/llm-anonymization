@@ -1,8 +1,17 @@
+/**
+ * Main Application Entry Point
+ *
+ * 整合侧边导航和页面路由
+ */
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
+
+// 导入侧边导航组件
+import { SideNavigation } from './components/SideNavigation';
 
 // Create a QueryClient for React Query
 const queryClient = new QueryClient({
@@ -15,33 +24,33 @@ const queryClient = new QueryClient({
   },
 });
 
-// Training Visualization Page (lazy loaded)
+// Lazy load pages
 const TrainingVisualization = React.lazy(() =>
   import('./pages/TrainingVisualization')
 );
 
-// TRACE-RPS Dashboard (lazy loaded)
 const TRACERPSDashboard = React.lazy(() =>
   import('./pages/TRACERPSDashboard')
 );
 
-// DeepSeek 5-Rounds Visualization (lazy loaded)
 const DeepSeek5RoundsVisualization = React.lazy(() =>
   import('./pages/DeepSeek5RoundsVisualization')
 );
 
-// Custom Test Page (lazy loaded)
 const CustomTestPage = React.lazy(() =>
   import('./pages/CustomTestPage')
 );
 
-// Chinese Demo Page (lazy loaded)
 const ChineseDemoPage = React.lazy(() =>
   import('./pages/ChineseDemoPage')
 );
 
-// Dashboard component
-const Dashboard: React.FC = () => {
+const AnonymizationDetail = React.lazy(() =>
+  import('./pages/AnonymizationDetail')
+);
+
+// Dashboard content
+const DashboardContent: React.FC = () => {
   const [profiles, setProfiles] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -64,185 +73,136 @@ const Dashboard: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
-                LLM Anonymization Visualizer
-              </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-400 mt-3">
-                探索和分析文本匿名化结果
-              </p>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <Link
-                to="/chinese-demo"
-                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg hover:from-amber-600 hover:to-orange-700 transition-all flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg"
-              >
-                <span>🇨🇳</span>
-                <span>中文演示</span>
-              </Link>
-              <Link
-                to="/custom-test"
-                className="px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-lg hover:from-rose-600 hover:to-pink-700 transition-all flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg"
-              >
-                <span>✏️</span>
-                <span>自定义测试</span>
-              </Link>
-              <Link
-                to="/trace-rps-dashboard"
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg"
-              >
-                <span>🔒</span>
-                <span>TRACE-RPS</span>
-              </Link>
-              <Link
-                to="/deepseek-5rounds"
-                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg"
-              >
-                <span>🎯</span>
-                <span>DeepSeek 5轮</span>
-              </Link>
-              <Link
-                to="/training-visualization"
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg"
-              >
-                <span>📊</span>
-                <span>Training Plots</span>
-              </Link>
-            </div>
+    <div className="p-6 lg:p-10">
+      {/* 页面标题 */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {error ? `错误: ${error}` : `用户列表 (${profiles.length})`}
+        </h2>
+      </div>
+
+      {/* 加载状态 */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">加载中...</p>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-200 dark:border-gray-800">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              {error ? `错误: ${error}` : `用户列表 (${profiles.length})`}
-            </h2>
-          </div>
-
-          {loading ? (
-            <div className="p-10 text-center text-gray-500 dark:text-gray-400 text-lg">
-              加载中...
-            </div>
-          ) : error ? (
-            <div className="p-10 text-center text-red-500">
-              <p className="mb-3 text-lg">无法连接到后端 API</p>
-              <p className="text-base text-gray-600 dark:text-gray-400">
-                请确保后端运行在 http://localhost:8001
-              </p>
-            </div>
-          ) : profiles.length === 0 ? (
-            <div className="p-10 text-center text-gray-500 dark:text-gray-400 text-lg">
-              <p>未找到用户数据</p>
-              <p className="text-base mt-3">
-                后端 API 正在运行，但暂时没有数据
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200 dark:divide-gray-800">
-              {profiles.map((profile) => (
-                <Link
-                  key={profile.profile_id}
-                  to={`/profile/${profile.profile_id}`}
-                  className="block px-8 py-6 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+      ) : error ? (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+          <p className="text-red-600 dark:text-red-400 mb-2">无法连接到后端 API</p>
+          <p className="text-sm text-red-500 dark:text-red-500">请确保后端运行在 http://localhost:8000</p>
+        </div>
+      ) : profiles.length === 0 ? (
+        <div className="text-center py-20">
+          <p className="text-gray-500 dark:text-gray-400">未找到用户数据</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    用户名
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    评论数
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    状态
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                {profiles.map((profile) => (
+                  <tr key={profile.profile_id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <td className="px-6 py-4">
+                      <Link
+                        to={`/profile/${profile.profile_id}`}
+                        className="text-violet-600 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-300 font-medium"
+                      >
                         {profile.username}
-                      </h3>
-                      <p className="text-base text-gray-500 dark:text-gray-400 mt-1">
-                        {profile.num_comments} 条评论
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {profile.has_anonymization && (
-                        <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-base rounded-lg font-medium">
-                          已匿名化
-                        </span>
-                      )}
-                      {profile.has_quality_scores && (
-                        <span className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-base rounded-lg font-medium">
-                          质量评分
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
+                      {profile.num_comments}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        {profile.has_anonymization && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            已匿名化
+                          </span>
+                        )}
+                        {profile.has_quality_scores && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            有评分
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </main>
+      )}
     </div>
   );
 };
 
-// Lazy load detail page
-const AnonymizationDetail = React.lazy(() =>
-  import('./pages/AnonymizationDetail').then(m => ({ default: m.AnonymizationDetail || m.default }))
-);
+// Main App component
+const App: React.FC = () => {
+  return (
+    <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <SideNavigation>
+        <Routes>
+          <Route path="/" element={<DashboardContent />} />
 
+          <Route
+            path="/profile/:profileId"
+            element={<AnonymizationDetail />}
+          />
+
+          <Route
+            path="/training-visualization"
+            element={<TrainingVisualization />}
+          />
+
+          <Route
+            path="/trace-rps-dashboard"
+            element={<TRACERPSDashboard />}
+          />
+
+          <Route
+            path="/deepseek-5rounds"
+            element={<DeepSeek5RoundsVisualization />}
+          />
+
+          <Route
+            path="/custom-test"
+            element={<CustomTestPage />}
+          />
+
+          <Route
+            path="/chinese-demo"
+            element={<ChineseDemoPage />}
+          />
+        </Routes>
+      </SideNavigation>
+    </React.Suspense>
+  );
+};
+
+// Mount the app
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route
-            path="/profile/:profileId"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <AnonymizationDetail />
-              </React.Suspense>
-            }
-          />
-          <Route
-            path="/training-visualization"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <TrainingVisualization />
-              </React.Suspense>
-            }
-          />
-          <Route
-            path="/trace-rps-dashboard"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <TRACERPSDashboard />
-              </React.Suspense>
-            }
-          />
-          <Route
-            path="/deepseek-5rounds"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <DeepSeek5RoundsVisualization />
-              </React.Suspense>
-            }
-          />
-          <Route
-            path="/custom-test"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <CustomTestPage />
-              </React.Suspense>
-            }
-          />
-          <Route
-            path="/chinese-demo"
-            element={
-              <React.Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-                <ChineseDemoPage />
-              </React.Suspense>
-            }
-          />
-        </Routes>
+        <App />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

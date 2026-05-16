@@ -1,0 +1,57 @@
+output_dir: "results"
+seed: 10
+task: "ANONYMIZED"
+dryrun: False
+save_prompts: True
+timeout: 60.0
+task_config:
+    run_eval_inference: True
+    profile_path: "anonymized_results/synthpai/deepseek/inference_comb.jsonl"
+    outpath: "anonymized_results/synthpai/deepseek"
+    anonymizer:
+      anon_type: "llm"
+      target_mode: "single"
+      max_workers: 4
+    anon_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 4096
+      }
+    inference_model:
+      name: "deepseek-reasoner"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 4096
+      }
+    utility_model:
+      name: "deepseek-chat"
+      provider: "deepseek"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2048
+      }
+    eval_inference_model:
+      name: "qwen-plus"
+      provider: "qwen"
+      args: {
+        temperature: 0.1,
+        max_tokens: 2048
+      }
+    profile_filter:
+      hardness: 1
+      certainty: 1
+      num_tokens: 8000
+    max_num_iterations: 1
+    use_ner: False
+    offset: 0
+    num_profiles: 250
+gen_model:
+  name: "deepseek-chat"
+  provider: "deepseek"
+  args: {
+    temperature: 0.1,
+    max_tokens: 4096
+  }
