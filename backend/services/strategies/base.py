@@ -123,6 +123,72 @@ class AnonymizationStrategy(ABC):
 
         return changes
 
+    def _parse_attack_response(self, response: str, attrs: List[str]) -> List[Dict]:
+        """Parse LLM attack response into structured attribute inferences."""
+        import json as json_module
+        import re
+
+        results = []
+        response_clean = response.strip()
+
+        # Try JSON array parse first
+        try:
+            parsed = json_module.loads(response_clean)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and "attribute" in item:
+                        attr_name = item["attribute"].lower()
+                        if attr_name in [a.lower() for a in attrs]:
+                            results.append({
+                                "attribute": attr_name,
+                                "guess": str(item.get("guess", "无法确定")),
+                                "certainty": int(item.get("certainty", 1)),
+                                "success": bool(item.get("certainty", 1) >= 3),
+                                "inference": item.get("reasoning", item.get("inference", "")),
+                            })
+        except (json_module.JSONDecodeError, TypeError, ValueError):
+            pass
+
+        if len(results) == len(attrs):
+            return results
+
+        # Fallback: try to extract JSON blocks from the response text
+        json_blocks = re.findall(r'\{[^{}]*"attribute"[^{}]*\}', response_clean)
+        for block in json_blocks:
+            try:
+                item = json_module.loads(block)
+                if isinstance(item, dict) and "attribute" in item:
+                    attr_name = item["attribute"].lower()
+                    if attr_name in [a.lower() for a in attrs] and not any(
+                        r["attribute"] == attr_name for r in results
+                    ):
+                        results.append({
+                            "attribute": attr_name,
+                            "guess": str(item.get("guess", "无法确定")),
+                            "certainty": int(item.get("certainty", 1)),
+                            "success": bool(item.get("certainty", 1) >= 3),
+                            "inference": item.get("reasoning", item.get("inference", "")),
+                        })
+            except (json_module.JSONDecodeError, TypeError, ValueError):
+                continue
+
+        # Final fallback: text-based extraction
+        seen_attrs = {r["attribute"] for r in results}
+        for attr in attrs:
+            if attr.lower() not in seen_attrs:
+                pattern = rf'{attr}[：:]?\s*([^\n]+)'
+                match = re.search(pattern, response_clean, re.IGNORECASE)
+                guess = match.group(1).strip() if match else "无法确定"
+                results.append({
+                    "attribute": attr,
+                    "guess": guess,
+                    "certainty": 1,
+                    "success": False,
+                    "inference": f"Parsed from text: {guess}",
+                })
+
+        return results
+
 
 class HomogeneousStrategy(AnonymizationStrategy):
     """
@@ -248,17 +314,6 @@ Certainty: [1-5]
 
 Text:
 {text}"""
-
-    def _parse_attack_response(self, response: str, attrs: List[str]) -> List[Dict]:
-        results = []
-        for attr in attrs:
-            results.append({
-                "attribute": attr,
-                "guess": "无法确定",
-                "certainty": 1,
-                "success": False,
-            })
-        return results
 
     async def _call_model(self, client, prompt: str) -> str:
         if client is None:
@@ -411,17 +466,6 @@ Certainty: [1-5]
 
 Text:
 {text}"""
-
-    def _parse_attack_response(self, response: str, attrs: List[str]) -> List[Dict]:
-        results = []
-        for attr in attrs:
-            results.append({
-                "attribute": attr,
-                "guess": "无法确定",
-                "certainty": 1,
-                "success": False,
-            })
-        return results
 
     async def _call_model_hetero(self, client, prompt: str) -> str:
         if client is None:
