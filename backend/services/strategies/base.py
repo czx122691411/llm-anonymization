@@ -189,6 +189,81 @@ class AnonymizationStrategy(ABC):
 
         return results
 
+    async def _assess_quality(
+        self, original_text: str, anonymized_text: str, max_certainty: int,
+        trace_anonymizer: Optional[Any] = None
+    ) -> "QualityScores":
+        """Compute quality scores using statistical metrics and optional LLM evaluation."""
+        # BLEU score
+        try:
+            from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+            ref = [original_text.split()]
+            hyp = anonymized_text.split()
+            smoothie = SmoothingFunction().method1
+            bleu = sentence_bleu(ref, hyp, smoothing_function=smoothie)
+        except Exception:
+            bleu = 0.0
+
+        # ROUGE-1 approximation
+        try:
+            ref_words = set(original_text.lower().split())
+            hyp_words = set(anonymized_text.lower().split())
+            rouge1 = len(ref_words & hyp_words) / len(ref_words) if ref_words else 1.0
+        except Exception:
+            rouge1 = 0.0
+
+        # LLM-based evaluation (attempt, fall back gracefully)
+        llm_readability = None
+        llm_meaning = None
+        llm_hallucination_score = None
+
+        if trace_anonymizer is not None:
+            eval_prompt = (
+                'Evaluate this text anonymization quality. Respond with JSON only.\n'
+                f'Original: "{original_text}"\n'
+                f'Anonymized: "{anonymized_text}"\n\n'
+                'Rate on three dimensions (0-100):\n'
+                '1. readability: how natural and readable is the anonymized text?\n'
+                '2. meaning_preservation: how well is the original meaning preserved?\n'
+                '3. hallucination: 100 = no new info introduced, 0 = fabricated content\n\n'
+                'Respond: {"readability": N, "meaning_preservation": N, "hallucination": N}'
+            )
+            try:
+                response = await trace_anonymizer._call_llm(
+                    trace_anonymizer.inference_client, eval_prompt
+                )
+                import re as _re
+                import json as _json
+                json_match = _re.search(r'\{[^}]+\}', response)
+                if json_match:
+                    scores = _json.loads(json_match.group())
+                    llm_readability = int(scores.get("readability", 0))
+                    llm_meaning = int(scores.get("meaning_preservation", 0))
+                    llm_hallucination_score = int(scores.get("hallucination", 100))
+            except Exception:
+                pass
+
+        # Compute final scores
+        privacy_score = max(0, min(100, 100 - (max_certainty * 20)))
+        inference_blocking = max(0, min(100, 100 - (max_certainty * 18)))
+
+        readability = float(
+            llm_readability or max(60, min(100, 100 - (1 - bleu) * 40))
+        )
+        meaning = float(
+            llm_meaning or max(50, min(100, rouge1 * 100))
+        )
+        utility = round((meaning + readability) / 2, 1)
+
+        # Import QualityScores at runtime to avoid circular imports
+        from backend.api.models.unified import QualityScores as QS
+        return QS(
+            privacy_protection=privacy_score,
+            utility_preservation=utility,
+            text_quality=readability,
+            inference_blocking=inference_blocking,
+        )
+
 
 class HomogeneousStrategy(AnonymizationStrategy):
     """
@@ -271,12 +346,11 @@ class HomogeneousStrategy(AnonymizationStrategy):
 
         # 质量评估
         current_step += 1
-        q = max(0, min(100, 100 - (max_certainty * 20)))
-        quality_scores = QualityScores(
-            privacy_protection=q,
-            utility_preservation=80.0,
-            text_quality=85.0,
-            inference_blocking=q
+        quality_scores = await self._assess_quality(
+            original_text=text,
+            anonymized_text=final_anonymized,
+            max_certainty=max_certainty,
+            trace_anonymizer=None,
         )
         await self.report_progress(progress_callback, current_step, total_steps, "质量评估", 100)
 
@@ -422,13 +496,11 @@ class HeterogeneousStrategy(AnonymizationStrategy):
                 break
 
         current_step += 1
-        q = max(0, min(100, 100 - (max_certainty * 20)))
-        # 异构方法因跨平台特性，隐私保护通常更好
-        quality_scores = QualityScores(
-            privacy_protection=min(100, q + 5),
-            utility_preservation=78.0,
-            text_quality=84.0,
-            inference_blocking=min(100, q + 5)
+        quality_scores = await self._assess_quality(
+            original_text=text,
+            anonymized_text=final_anonymized,
+            max_certainty=max_certainty,
+            trace_anonymizer=None,
         )
         await self.report_progress(progress_callback, current_step, total_steps, "质量评估", 100)
 
@@ -776,11 +848,11 @@ class TRACE_RPSStrategy(AnonymizationStrategy):
             [inf.certainty for inf in inferences.values()], default=1
         )
 
-        quality_scores = QualityScores(
-            privacy_protection=max(0, min(100, 100 - (max_certainty * 20))),
-            utility_preservation=72.4,
-            text_quality=91.2,
-            inference_blocking=max(0, min(100, 100 - (max_certainty * 18)))
+        quality_scores = await self._assess_quality(
+            original_text=text,
+            anonymized_text=current_text,
+            max_certainty=max_certainty,
+            trace_anonymizer=trace_anonymizer,
         )
 
         # 生成推理测试结果
