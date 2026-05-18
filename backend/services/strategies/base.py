@@ -137,7 +137,7 @@ class AnonymizationStrategy(ABC):
             if isinstance(parsed, list):
                 for item in parsed:
                     if isinstance(item, dict) and "attribute" in item:
-                        attr_name = item["attribute"].lower()
+                        attr_name = item.get("attribute", "").lower()
                         if attr_name in [a.lower() for a in attrs]:
                             results.append({
                                 "attribute": attr_name,
@@ -158,7 +158,7 @@ class AnonymizationStrategy(ABC):
             try:
                 item = json_module.loads(block)
                 if isinstance(item, dict) and "attribute" in item:
-                    attr_name = item["attribute"].lower()
+                    attr_name = item.get("attribute", "").lower()
                     if attr_name in [a.lower() for a in attrs] and not any(
                         r["attribute"] == attr_name for r in results
                     ):
@@ -176,7 +176,7 @@ class AnonymizationStrategy(ABC):
         seen_attrs = {r["attribute"] for r in results}
         for attr in attrs:
             if attr.lower() not in seen_attrs:
-                pattern = rf'{attr}[：:]?\s*([^\n]+)'
+                pattern = rf'\b{re.escape(attr)}\b[：:]?\s*([^\n]+)'
                 match = re.search(pattern, response_clean, re.IGNORECASE)
                 guess = match.group(1).strip() if match else "无法确定"
                 results.append({
