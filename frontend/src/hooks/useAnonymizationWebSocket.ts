@@ -170,7 +170,7 @@ export function useAnonymizationWebSocket() {
             setState(prev => ({
               ...prev,
               status: 'failed',
-              error: msg.error?.message || msg.message || 'Unknown error',
+              error: msg.error?.message || msg.data?.error || msg.message || 'Unknown error',
             }));
             ws.close();
             break;

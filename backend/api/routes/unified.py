@@ -168,7 +168,7 @@ async def execute_anonymization_task(task_id: str, request: AnonymizationRequest
         await broadcast_progress(task_id, {
             "type": "complete",
             "task_id": task_id,
-            "data": {"status": "completed"}
+            "result": result.dict() if hasattr(result, 'dict') else result
         })
 
     except Exception as e:
@@ -187,7 +187,7 @@ async def execute_anonymization_task(task_id: str, request: AnonymizationRequest
         await broadcast_progress(task_id, {
             "type": "error",
             "task_id": task_id,
-            "data": {"error": str(e)}
+            "error": {"message": str(e)}
         })
 
 
