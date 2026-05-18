@@ -18,6 +18,7 @@ from src.configs import AnonymizationConfig
 from .routes.anonymization import router as anon_router
 from .routes import unified  # Import unified routes
 from .routes import deepseek_training  # Import deepseek training routes
+from .routes import synthpai  # Import synthpai routes
 
 # Initialize app
 app = FastAPI(
@@ -30,6 +31,7 @@ app = FastAPI(
 app.include_router(anon_router)
 app.include_router(unified.router)  # Add unified routes
 app.include_router(deepseek_training.router)  # Add deepseek training routes
+app.include_router(synthpai.router)  # Add synthpai routes
 
 # Configure CORS
 app.add_middleware(
@@ -76,6 +78,11 @@ async def root():
                 "methods": "/api/unified/methods",
                 "attributes": "/api/unified/attributes",
                 "health": "/api/unified/health"
+            },
+            "synthpai": {
+                "users": "/api/synthpai/users",
+                "user_detail": "/api/synthpai/users/{username}",
+                "comment_round": "/api/synthpai/users/{username}/comments/{idx}/rounds/{n}"
             }
         }
     }

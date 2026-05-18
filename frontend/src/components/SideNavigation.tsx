@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/trace-rps-dashboard', icon: '🔒', label: 'TRACE-RPS', gradient: 'from-blue-600 to-purple-600' },
   { path: '/deepseek-5rounds', icon: '🎯', label: 'DeepSeek 5轮', gradient: 'from-emerald-600 to-teal-600' },
   { path: '/training-visualization', icon: '📊', label: 'Training Plots', gradient: 'bg-slate-600' },
+  { path: '/synthpai', icon: '🛡️', label: 'SynthPAI 对抗分析', gradient: 'from-violet-600 to-purple-600' },
 ];
 
 interface SideNavigationProps {

@@ -49,6 +49,14 @@ const AnonymizationDetail = React.lazy(() =>
   import('./pages/AnonymizationDetail')
 );
 
+const SynthpaiDashboard = React.lazy(() =>
+  import('./pages/SynthpaiDashboard')
+);
+
+const SynthpaiUserDetail = React.lazy(() =>
+  import('./pages/SynthpaiUserDetail')
+);
+
 // Dashboard content
 const DashboardContent: React.FC = () => {
   const [profiles, setProfiles] = React.useState<any[]>([]);
@@ -190,6 +198,16 @@ const App: React.FC = () => {
           <Route
             path="/chinese-demo"
             element={<ChineseDemoPage />}
+          />
+
+          <Route
+            path="/synthpai"
+            element={<SynthpaiDashboard />}
+          />
+
+          <Route
+            path="/synthpai/:username"
+            element={<SynthpaiUserDetail />}
           />
         </Routes>
       </SideNavigation>
