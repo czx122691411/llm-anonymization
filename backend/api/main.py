@@ -19,6 +19,7 @@ from .routes.anonymization import router as anon_router
 from .routes import unified  # Import unified routes
 from .routes import deepseek_training  # Import deepseek training routes
 from .routes import synthpai  # Import synthpai routes
+from .routes import session  # Import session routes
 
 # Initialize app
 app = FastAPI(
@@ -32,6 +33,7 @@ app.include_router(anon_router)
 app.include_router(unified.router)  # Add unified routes
 app.include_router(deepseek_training.router)  # Add deepseek training routes
 app.include_router(synthpai.router)  # Add synthpai routes
+app.include_router(session.router)  # Add session management routes
 
 # Configure CORS
 app.add_middleware(
@@ -83,6 +85,10 @@ async def root():
                 "users": "/api/synthpai/users",
                 "user_detail": "/api/synthpai/users/{username}",
                 "comment_round": "/api/synthpai/users/{username}/comments/{idx}/rounds/{n}"
+            },
+            "session": {
+                "infer": "/api/session/infer",
+                "quality_assess": "/api/session/quality/assess"
             }
         }
     }
