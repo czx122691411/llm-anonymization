@@ -180,33 +180,62 @@ async def execute_anonymization_task(task_id: str, request: AnonymizationRequest
             try:
                 from backend.db.database import auto_save_result
                 r = result.dict()
+                detail = r.get("trace_rps_details", {})
+
+                # Build rounds: one per iteration + final quality round
+                rounds = []
+                iterations_data = detail.get("iteration_results") or []
+
+                for it in iterations_data:
+                    rounds.append({
+                        "round_num": it.get("iteration", 0),
+                        "anonymized_text": it.get("after_text", ""),
+                        "max_confidence": it.get("certainty_after", 0),
+                        "quality": None,  # quality only computed at the end
+                        "inferences": [
+                            {"attribute": inf.get("attribute", ""), "inference_text": inf.get("inference", ""),
+                             "guesses": [str(inf.get("guess", ""))],
+                             "confidence": inf.get("certainty", 1),
+                             "blocked": inf.get("certainty", 1) <= 2, "ground_truth": None}
+                            for inf in (it.get("inferences") or [])
+                        ],
+                        "chains": [
+                            {"attribute": c.get("attribute", ""), "target_guess": c.get("target_guess", ""),
+                             "blocked": c.get("blocked", False), "nodes": c.get("nodes", [])}
+                            for c in (it.get("leakage_chains") or [])
+                        ],
+                    })
+
+                # Add final round with quality scores
+                rounds.append({
+                    "round_num": len(rounds),
+                    "anonymized_text": r.get("anonymized_text", ""),
+                    "max_confidence": detail.get("final_certainty", 0),
+                    "quality": r.get("quality_scores", {}),
+                    "inferences": [
+                        {"attribute": t.get("attribute"), "inference_text": "",
+                         "guesses": [str(t.get("after_attack", {}).get("guess", ""))],
+                         "confidence": t.get("after_attack", {}).get("certainty", 1),
+                         "blocked": t.get("blocked", False), "ground_truth": None}
+                        for t in (r.get("inference_test") or [])
+                    ],
+                    "chains": [
+                        {"attribute": c.get("attribute"), "target_guess": c.get("target_guess", ""),
+                         "blocked": c.get("blocked", False), "nodes": c.get("nodes", [])}
+                        for c in (detail.get("reasoning_chains") or [])
+                    ],
+                })
+
                 comment_data = {
                     "index": 0,
                     "original_text": request.text,
                     "status": "done",
                     "risk_score": 0,
-                    "rounds": [{
-                        "round_num": 0,
-                        "anonymized_text": r.get("anonymized_text", ""),
-                        "max_confidence": r.get("trace_rps_details", {}).get("final_certainty", 0),
-                        "quality": r.get("quality_scores", {}),
-                        "inferences": [
-                            {"attribute": t.get("attribute"), "inference_text": "",
-                             "guesses": [str(t.get("after_attack", {}).get("guess", ""))],
-                             "confidence": t.get("after_attack", {}).get("certainty", 1),
-                             "blocked": t.get("blocked", False), "ground_truth": None}
-                            for t in (r.get("inference_test") or [])
-                        ],
-                        "chains": [
-                            {"attribute": c.get("attribute"), "target_guess": c.get("target_guess", ""),
-                             "blocked": c.get("blocked", False), "nodes": c.get("nodes", [])}
-                            for c in (r.get("trace_rps_details", {}).get("reasoning_chains") or [])
-                        ],
-                    }]
+                    "rounds": rounds,
                 }
                 auto_save_result(request.session_id, {}, [comment_data])
             except Exception:
-                pass  # Don't fail the task if DB save fails
+                pass
 
     except Exception as e:
         # 更新任务为失败

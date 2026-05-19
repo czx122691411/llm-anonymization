@@ -155,17 +155,36 @@ const ResearchPlatform: React.FC = () => {
     setCommentStatus,
   ]);
 
-  // When result arrives, add it as a round
+  // When result arrives, add all rounds (iterations + final)
   React.useEffect(() => {
     if (result && selectedComment && selectedComment.status === 'processing') {
-      // Extract inference data from result
       const inferenceTest = (result as any).inference_test || [];
       const reasoningChains = (result as any).trace_rps_details?.reasoning_chains || [];
+      const iterationResults = (result as any).trace_rps_details?.iteration_results || [];
       const attrConfs: Record<string, number> = {};
       inferenceTest.forEach((t: any) => {
         attrConfs[t.attribute || ''] = t.after_attack?.certainty || t.before_attack?.certainty || 0;
       });
 
+      // Add each iteration as a separate round
+      for (const it of iterationResults) {
+        addRoundResult(selectedComment.index, {
+          roundNum: selectedComment.rounds.length,
+          anonymizedText: it.after_text || it.anonymized_text || '',
+          inferences: {
+            test: (it.inferences || []).map((inf: any) => ({
+              attribute: inf.attribute || '',
+              after_attack: { guess: inf.guess || inf.guesses?.[0] || '', certainty: inf.certainty || 1 },
+              blocked: (inf.certainty || 1) <= 2,
+            })),
+            chains: it.leakage_chains || [],
+          } as any,
+          maxConfidence: it.certainty_after || 0,
+          quality: null,
+        });
+      }
+
+      // Add final round with quality scores
       addRoundResult(selectedComment.index, {
         roundNum: selectedComment.rounds.length,
         anonymizedText: result.anonymized_text,

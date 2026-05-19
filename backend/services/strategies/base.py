@@ -893,7 +893,8 @@ class TRACE_RPSStrategy(AnonymizationStrategy):
                 iterations=len(all_iterations),
                 reasoning_chains=final_reasoning_chains,
                 final_certainty=max_certainty,
-                processing_time=processing_time
+                processing_time=processing_time,
+                iteration_results=all_iterations
             )
         )
 

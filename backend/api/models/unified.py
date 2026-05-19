@@ -144,12 +144,26 @@ class ReasoningChain(BaseModel):
     blocked: bool
 
 
+class IterationIntermediate(BaseModel):
+    """单次迭代的中间结果（WebSocket实时推送）"""
+    iteration: int
+    before_text: str
+    after_text: str
+    inferences: List[Dict[str, Any]] = Field(default_factory=list, description="攻击者推断结果")
+    attention_words: List[str] = Field(default_factory=list, description="注意力定位的隐私关键词")
+    leakage_chains: List[ReasoningChain] = Field(default_factory=list, description="隐私泄露链")
+    improvements: List[str] = Field(default_factory=list, description="本轮的改动说明")
+    certainty_before: float = 0
+    certainty_after: float = 0
+
+
 class TRACE_RPSDetails(BaseModel):
     """TRACE-RPS 特定详情"""
     iterations: int
     reasoning_chains: List[ReasoningChain]
     final_certainty: int
     processing_time: float
+    iteration_results: List[IterationIntermediate] = Field(default_factory=list, description="各轮迭代的中间结果")
 
 
 class AnonymizationResult(BaseModel):
@@ -173,19 +187,6 @@ class AnonymizationResult(BaseModel):
 
     # 对抗训练特定结果（占位，如需要可扩展）
     adversarial_details: Optional[Dict[str, Any]] = None
-
-
-class IterationIntermediate(BaseModel):
-    """单次迭代的中间结果（WebSocket实时推送）"""
-    iteration: int
-    before_text: str
-    after_text: str
-    inferences: List[Dict[str, Any]] = Field(default_factory=list, description="攻击者推断结果")
-    attention_words: List[str] = Field(default_factory=list, description="注意力定位的隐私关键词")
-    leakage_chains: List[ReasoningChain] = Field(default_factory=list, description="隐私泄露链")
-    improvements: List[str] = Field(default_factory=list, description="本轮的改动说明")
-    certainty_before: float = 0
-    certainty_after: float = 0
 
 
 class TRACEStepDetail(BaseModel):
