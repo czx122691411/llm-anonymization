@@ -57,6 +57,10 @@ const SynthpaiUserDetail = React.lazy(() =>
   import('./pages/SynthpaiUserDetail')
 );
 
+const ResearchPlatform = React.lazy(() =>
+  import('./pages/ResearchPlatform')
+);
+
 // Dashboard content
 const DashboardContent: React.FC = () => {
   const [profiles, setProfiles] = React.useState<any[]>([]);
@@ -193,6 +197,11 @@ const App: React.FC = () => {
           <Route
             path="/custom-test"
             element={<CustomTestPage />}
+          />
+
+          <Route
+            path="/research"
+            element={<ResearchPlatform />}
           />
 
           <Route
