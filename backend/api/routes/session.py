@@ -160,3 +160,46 @@ async def assess_quality(request: QualityAssessRequest):
         bleu=round(bleu, 4),
         rouge={"rouge1": round(rouge1, 4)},
     )
+
+
+# ---- Database persistence endpoints ----
+
+from backend.db.database import (
+    save_session, load_session, list_sessions, delete_session, auto_save_result
+)
+
+
+@router.post("/save")
+async def save_session_endpoint(request: Dict[str, Any]):
+    """Save a complete session (comments + rounds + inferences) to SQLite."""
+    session_id = request.get("session_id", "")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+    persona = request.get("persona", {})
+    comments = request.get("comments", [])
+    auto_save_result(session_id, persona, comments)
+    return {"status": "saved", "session_id": session_id}
+
+
+@router.get("/list")
+async def list_sessions_endpoint():
+    """List all saved sessions."""
+    return list_sessions()
+
+
+@router.get("/load/{session_id}")
+async def load_session_endpoint(session_id: str):
+    """Load a saved session with all comments, rounds, and inferences."""
+    data = load_session(session_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    return data
+
+
+@router.delete("/{session_id}")
+async def delete_session_endpoint(session_id: str):
+    """Delete a saved session."""
+    ok = delete_session(session_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    return {"status": "deleted", "session_id": session_id}

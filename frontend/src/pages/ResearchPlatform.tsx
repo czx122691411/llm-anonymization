@@ -116,8 +116,98 @@ const ResearchPlatform: React.FC = () => {
   const selectedRound =
     state.selectedRound >= 0 ? selectedComment?.rounds[state.selectedRound] : undefined;
 
+  // Save / Load handlers
+  const handleSave = async () => {
+    const data = {
+      session_id: state.sessionId,
+      persona: state.persona,
+      comments: state.comments.map((c) => ({
+        index: c.index,
+        original_text: c.originalText,
+        status: c.status,
+        risk_score: c.riskScore,
+        rounds: c.rounds.map((r) => ({
+          round_num: r.roundNum,
+          anonymized_text: r.anonymizedText,
+          max_confidence: r.maxConfidence,
+          quality: r.quality,
+          inferences: (r.inferences as any)?.test?.map((t: any) => ({
+            attribute: t.attribute,
+            inference_text: '',
+            guesses: [t.after_attack?.guess || t.before_attack?.guess || ''],
+            confidence: t.after_attack?.certainty || 1,
+            blocked: t.blocked || false,
+            ground_truth: null,
+          })) || [],
+          chains: (r.inferences as any)?.chains || [],
+        })),
+      })),
+    };
+    try {
+      const res = await fetch('/api/session/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) alert('会话已保存');
+    } catch { alert('保存失败'); }
+  };
+
+  const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  const handleLoadSessions = async () => {
+    try {
+      const res = await fetch('/api/session/list');
+      const data = await res.json();
+      setSavedSessions(data);
+    } catch {}
+  };
+
+  const handleLoadSession = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/session/load/${sessionId}`);
+      const data = await res.json();
+      reset();
+      if (data.persona) setPersona(data.persona);
+      for (const c of data.comments || []) {
+        addComment(c.original_text);
+        const idx = state.comments.length;
+        for (const r of c.rounds || []) {
+          addRoundResult(idx, {
+            roundNum: r.round_num,
+            anonymizedText: r.anonymized_text,
+            inferences: { test: r.inferences, chains: r.chains } as any,
+            maxConfidence: r.max_confidence || 0,
+            quality: r.quality,
+          });
+        }
+        setCommentStatus(idx, c.status || 'done');
+      }
+      setSavedSessions([]);
+    } catch { alert('加载失败'); }
+  };
+
   return (
-    <div className="flex h-[calc(100vh-6rem)] gap-0">
+    <>
+      {/* Top toolbar */}
+      <div className="flex items-center gap-3 px-6 py-2 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <span className="text-sm font-medium text-gray-600">会话: {state.sessionId}</span>
+        <button onClick={handleSave} className="px-3 py-1 text-xs bg-violet-600 text-white rounded hover:bg-violet-700">保存</button>
+        <div className="relative">
+          <button onClick={handleLoadSessions} className="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded hover:bg-gray-50">加载</button>
+          {savedSessions.length > 0 && (
+            <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+              {savedSessions.map((s: any) => (
+                <button key={s.id} onClick={() => handleLoadSession(s.id)} className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-100">
+                  <div className="font-medium">{s.id}</div>
+                  <div className="text-gray-400">{s.comment_count} 评论 — {s.updated_at}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex h-[calc(100vh-8rem)] gap-0">
       {/* ===== LEFT PANEL: Comment Warehouse ===== */}
       <div className="w-80 shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-white dark:bg-gray-900">
         {/* Persona card */}
@@ -656,6 +746,7 @@ const ReasoningChainCard: React.FC<{ chain: any }> = ({ chain }) => {
         </div>
       )}
     </div>
+    </>
   );
 };
 

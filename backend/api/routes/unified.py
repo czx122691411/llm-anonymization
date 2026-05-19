@@ -175,6 +175,39 @@ async def execute_anonymization_task(task_id: str, request: AnonymizationRequest
             "result": result.dict() if hasattr(result, 'dict') else result
         })
 
+        # Auto-save to database if session context is provided
+        if request.session_id and hasattr(result, 'dict'):
+            try:
+                from backend.db.database import auto_save_result
+                r = result.dict()
+                comment_data = {
+                    "index": 0,
+                    "original_text": request.text,
+                    "status": "done",
+                    "risk_score": 0,
+                    "rounds": [{
+                        "round_num": 0,
+                        "anonymized_text": r.get("anonymized_text", ""),
+                        "max_confidence": r.get("trace_rps_details", {}).get("final_certainty", 0),
+                        "quality": r.get("quality_scores", {}),
+                        "inferences": [
+                            {"attribute": t.get("attribute"), "inference_text": "",
+                             "guesses": [str(t.get("after_attack", {}).get("guess", ""))],
+                             "confidence": t.get("after_attack", {}).get("certainty", 1),
+                             "blocked": t.get("blocked", False), "ground_truth": None}
+                            for t in (r.get("inference_test") or [])
+                        ],
+                        "chains": [
+                            {"attribute": c.get("attribute"), "target_guess": c.get("target_guess", ""),
+                             "blocked": c.get("blocked", False), "nodes": c.get("nodes", [])}
+                            for c in (r.get("trace_rps_details", {}).get("reasoning_chains") or [])
+                        ],
+                    }]
+                }
+                auto_save_result(request.session_id, {}, [comment_data])
+            except Exception:
+                pass  # Don't fail the task if DB save fails
+
     except Exception as e:
         # 更新任务为失败
         TaskManager.update_task(
