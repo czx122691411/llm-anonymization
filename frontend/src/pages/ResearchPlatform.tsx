@@ -6,7 +6,7 @@ import {
   AnonymizationMethod,
   SensitiveAttribute,
 } from '../components/MethodConfigPanel';
-import { Plus, Send, Trash2, Download, FlaskConical } from 'lucide-react';
+import { Plus, Send, Trash2, Download, FlaskConical, ChevronDown, ChevronRight } from 'lucide-react';
 
 const ResearchPlatform: React.FC = () => {
   const {
@@ -81,10 +81,18 @@ const ResearchPlatform: React.FC = () => {
   // When result arrives, add it as a round
   React.useEffect(() => {
     if (result && selectedComment && selectedComment.status === 'processing') {
+      // Extract inference data from result
+      const inferenceTest = (result as any).inference_test || [];
+      const reasoningChains = (result as any).trace_rps_details?.reasoning_chains || [];
+      const attrConfs: Record<string, number> = {};
+      inferenceTest.forEach((t: any) => {
+        attrConfs[t.attribute || ''] = t.after_attack?.certainty || t.before_attack?.certainty || 0;
+      });
+
       addRoundResult(selectedComment.index, {
         roundNum: selectedComment.rounds.length,
         anonymizedText: result.anonymized_text,
-        inferences: {} as Record<string, any>,
+        inferences: { test: inferenceTest, chains: reasoningChains } as Record<string, any>,
         maxConfidence: result.trace_rps_details?.final_certainty || 0,
         quality: result.quality_scores || null,
       });
@@ -92,7 +100,7 @@ const ResearchPlatform: React.FC = () => {
       const maxCert = result.trace_rps_details?.final_certainty || 0;
       addPrivacySnapshot({
         commentCount: state.comments.filter((c) => c.status === 'done').length + 1,
-        attributeConfidences: {} as Record<string, number>,
+        attributeConfidences: attrConfs,
         maxConfidence: maxCert,
       });
     }
@@ -359,6 +367,67 @@ const ResearchPlatform: React.FC = () => {
                   </div>
                 )}
 
+                {/* Reasoning Chains */}
+                {selectedRound.inferences?.chains?.length > 0 && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      攻击者推理链 (CoT)
+                    </h3>
+                    <div className="space-y-3">
+                      {(selectedRound.inferences.chains as any[]).map((chain: any, ci: number) => (
+                        <ReasoningChainCard key={ci} chain={chain} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Inference test results */}
+                {selectedRound.inferences?.test?.length > 0 && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                      攻击者推断结果
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs text-gray-500 uppercase">
+                            <th className="text-left py-2">属性</th>
+                            <th className="text-left py-2">推断</th>
+                            <th className="text-center py-2">确定性</th>
+                            <th className="text-center py-2">阻断</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {(selectedRound.inferences.test as any[]).map((t: any, ti: number) => (
+                            <tr key={ti}>
+                              <td className="py-2 font-medium capitalize">{t.attribute || '-'}</td>
+                              <td className="py-2 text-xs text-gray-600 max-w-xs truncate">
+                                {t.before_attack?.guess || '-'}
+                              </td>
+                              <td className="py-2 text-center">
+                                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                                  (t.after_attack?.certainty || t.before_attack?.certainty || 1) >= 4
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {t.after_attack?.certainty || t.before_attack?.certainty || '-'}/5
+                                </span>
+                              </td>
+                              <td className="py-2 text-center">
+                                {t.blocked ? (
+                                  <span className="text-green-500 text-xs">✓ 已阻断</span>
+                                ) : (
+                                  <span className="text-red-500 text-xs">✗ 泄露</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="flex gap-2">
                   <button className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
@@ -513,6 +582,63 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     >
       {c.label}
     </span>
+  );
+};
+
+const ReasoningChainCard: React.FC<{ chain: any }> = ({ chain }) => {
+  const [expanded, setExpanded] = useState(false);
+  const nodeColors: Record<string, string> = {
+    evidence: 'bg-blue-50 border-blue-200 text-blue-700',
+    inference: 'bg-purple-50 border-purple-200 text-purple-700',
+    conclusion: 'bg-red-50 border-red-200 text-red-700',
+    blocked: 'bg-green-50 border-green-200 text-green-700',
+  };
+
+  return (
+    <div className="border border-gray-100 rounded-lg">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium capitalize">{chain.attribute || 'Unknown'}</span>
+          {chain.blocked ? (
+            <span className="text-xs text-green-500">✓ 已阻断</span>
+          ) : (
+            <span className="text-xs text-red-500">✗ 泄露</span>
+          )}
+          <span className="text-xs text-gray-400">→ {chain.targetGuess || chain.target_guess || '-'}</span>
+        </div>
+        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </button>
+      {expanded && chain.nodes && (
+        <div className="px-4 pb-4 space-y-2">
+          {(chain.nodes as any[]).map((node: any, ni: number) => (
+            <div key={ni} className={`flex gap-3 p-3 rounded-lg border ${nodeColors[node.type] || 'bg-gray-50 border-gray-200'}`}>
+              <div className="shrink-0 w-6 h-6 rounded-full bg-white border flex items-center justify-center text-xs font-bold">
+                {ni + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium uppercase opacity-60">{node.type}</span>
+                  {node.confidence && (
+                    <span className="text-xs bg-white/50 px-1.5 py-0.5 rounded">
+                      置信度 {node.confidence}/5
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm">{node.text}</p>
+                {node.evidence && (
+                  <p className="mt-1 text-xs italic opacity-70">
+                    📎 证据: "{node.evidence}"
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
