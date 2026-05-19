@@ -171,6 +171,7 @@ const DashboardContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <SessionProvider>
       <SideNavigation>
         <Routes>
           <Route path="/" element={<DashboardContent />} />
@@ -202,7 +203,7 @@ const App: React.FC = () => {
 
           <Route
             path="/research"
-            element={<SessionProvider><ResearchPlatform /></SessionProvider>}
+            element={<ResearchPlatform />}
           />
 
           <Route
@@ -221,6 +222,7 @@ const App: React.FC = () => {
           />
         </Routes>
       </SideNavigation>
+      </SessionProvider>
     </React.Suspense>
   );
 };

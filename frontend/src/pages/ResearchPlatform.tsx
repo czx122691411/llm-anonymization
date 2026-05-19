@@ -158,25 +158,42 @@ const ResearchPlatform: React.FC = () => {
             </div>
           ) : (
             state.comments.map((comment) => (
-              <button
+              <div
                 key={comment.index}
-                onClick={() => selectComment(comment.index)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 dark:border-gray-800 transition-colors ${
+                className={`group flex items-start gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800 transition-colors ${
                   state.selectedCommentIndex === comment.index
                     ? 'bg-violet-50 dark:bg-violet-900/20 border-l-2 border-l-violet-500'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-gray-500">
-                    Comment #{comment.index + 1}
-                  </span>
-                  <StatusBadge status={comment.status} />
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                  {comment.originalText}
-                </p>
-              </button>
+                <button
+                  onClick={() => selectComment(comment.index)}
+                  className="flex-1 text-left min-w-0"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-500">
+                      Comment #{comment.index + 1}
+                    </span>
+                    <StatusBadge status={comment.status} />
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                    {comment.originalText}
+                  </p>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteComment(comment.index);
+                    if (state.selectedCommentIndex >= state.comments.length - 1) {
+                      selectComment(Math.max(0, state.comments.length - 2));
+                    }
+                  }}
+                  className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-all"
+                  title="删除评论"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ))
           )}
         </div>
