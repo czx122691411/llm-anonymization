@@ -12,6 +12,7 @@ import './index.css';
 
 // 导入侧边导航组件
 import { SideNavigation } from './components/SideNavigation';
+import { SessionProvider } from './context/SessionContext';
 
 // Create a QueryClient for React Query
 const queryClient = new QueryClient({
@@ -201,7 +202,7 @@ const App: React.FC = () => {
 
           <Route
             path="/research"
-            element={<ResearchPlatform />}
+            element={<SessionProvider><ResearchPlatform /></SessionProvider>}
           />
 
           <Route
