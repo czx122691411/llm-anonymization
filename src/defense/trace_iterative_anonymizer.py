@@ -619,20 +619,20 @@ Note: Do not copy or repeat the original comments verbatim. You must rewrite or 
 
             return anonymized.strip()
         else:
-            # Try to extract from lines
-            lines = response.split('\n')
-            anonymized_lines = []
-            skip_explanation = True
-
-            for line in lines:
-                line = line.strip()
-                if line == '#':
-                    skip_explanation = False
-                    continue
-                if not skip_explanation and line:
-                    anonymized_lines.append(line)
-
-            return '\n'.join(anonymized_lines) if anonymized_lines else response
+            # No '#' found; clean up the response and use it as-is
+            cleaned = response.strip()
+            common_prefixes = [
+                "Anonymized text:", "Output:", "Result:",
+                "Here is the anonymized", "Here's the anonymized",
+            ]
+            for pfx in common_prefixes:
+                if cleaned.lower().startswith(pfx.lower()):
+                    cleaned = cleaned[len(pfx):].strip()
+            markers = ["\n---\n", "\n===\n", "\nAnonymized:\n"]
+            for mk in markers:
+                if mk in cleaned:
+                    cleaned = cleaned.split(mk, 1)[1].strip()
+            return cleaned if cleaned else response
 
     def _identify_improvements(
         self,
@@ -662,6 +662,7 @@ Note: Do not copy or repeat the original comments verbatim. You must rewrite or 
             # Fallback to demo mode when LLM is not available
             return await self._demo_mode_response(prompt)
 
+        loop = asyncio.get_event_loop()
         try:
             # Handle different LLM client types
             if hasattr(client, 'predict'):
@@ -674,19 +675,21 @@ Note: Do not copy or repeat the original comments verbatim. You must rewrite or 
                         intermediate=prompt,
                         footer=""
                     )
-                    return client.predict(prompt_obj)
+                    return await loop.run_in_executor(None, client.predict, prompt_obj)
                 else:
-                    return client.predict(prompt)
+                    return await loop.run_in_executor(None, client.predict, prompt)
             elif hasattr(client, 'predict_string'):
                 # Use predict_string for raw string input
-                return client.predict_string(prompt)
+                return await loop.run_in_executor(None, client.predict_string, prompt)
             elif hasattr(client, 'complete'):
-                return client.complete(prompt)
+                return await loop.run_in_executor(None, client.complete, prompt)
             elif hasattr(client, 'chat'):
-                response = client.chat([{"role": "user", "content": prompt}])
-                if isinstance(response, dict):
-                    return response.get('content', str(response))
-                return response
+                def _do_chat():
+                    r = client.chat([{"role": "user", "content": prompt}])
+                    if isinstance(r, dict):
+                        return r.get('content', str(r))
+                    return r
+                return await loop.run_in_executor(None, _do_chat)
             else:
                 return "Unsupported LLM client type"
         except Exception as e:

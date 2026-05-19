@@ -227,6 +227,10 @@ class TaskProgress(BaseModel):
 class AnonymizationRequest(BaseModel):
     """匿名化请求"""
 
+    # Session context for cross-comment inference
+    session_id: Optional[str] = Field(default=None, description="会话ID，用于关联同一用户的多条评论")
+    all_comments: Optional[List[str]] = Field(default=None, description="同一用户的所有评论，用于跨评论攻击推断")
+
     # 文本输入
     text: str = Field(..., min_length=1, max_length=10000, description="待匿名化的文本")
 

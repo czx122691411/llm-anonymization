@@ -56,6 +56,8 @@ const ResearchPlatform: React.FC = () => {
     if (!selectedComment || isProcessing) return;
     setCommentStatus(selectedComment.index, 'processing');
     await submitTask({
+      session_id: state.sessionId,
+      all_comments: state.comments.map((c) => c.originalText),
       text: selectedComment.originalText,
       method: selectedMethod,
       config: {

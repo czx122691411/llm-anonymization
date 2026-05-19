@@ -243,9 +243,16 @@ class AnonymizationStrategy(ABC):
             except Exception:
                 pass
 
+        # Detect no-change anonymization (failed anonymization)
+        text_changed = original_text.strip() != anonymized_text.strip()
+
         # Compute final scores
         privacy_score = max(0, min(100, 100 - (max_certainty * 20)))
         inference_blocking = max(0, min(100, 100 - (max_certainty * 18)))
+
+        if not text_changed:
+            privacy_score = 0.0
+            inference_blocking = 0.0
 
         readability = float(
             llm_readability or max(60, min(100, 100 - (1 - bleu) * 40))
@@ -577,9 +584,14 @@ class TRACE_RPSStrategy(AnonymizationStrategy):
         self,
         text: str,
         config: AnonymizationConfig,
-        progress_callback: Optional[Callable[[TaskProgress], Any]] = None
+        progress_callback: Optional[Callable[[TaskProgress], Any]] = None,
+        all_comments: Optional[List[str]] = None,
     ) -> AnonymizationResult:
-        """执行TRACE-RPS匿名化，实时上报TRACE步骤和迭代中间结果"""
+        """执行TRACE-RPS匿名化，实时上报TRACE步骤和迭代中间结果
+
+        Args:
+            all_comments: 可选，同一用户的所有评论，用于跨评论攻击推断
+        """
         import time
         start_time = time.time()
 

@@ -149,12 +149,16 @@ async def execute_anonymization_task(task_id: str, request: AnonymizationRequest
                 "data": progress.dict()
             })
 
-        # 执行匿名化
-        result = await strategy.execute(
-            request.text,
-            request.config,
-            progress_callback if request.options.enable_progress_stream else None
-        )
+        # 执行匿名化 (支持跨评论上下文)
+        import inspect
+        exec_kwargs = {
+            "text": request.text,
+            "config": request.config,
+            "progress_callback": progress_callback if request.options.enable_progress_stream else None,
+        }
+        if request.all_comments and "all_comments" in inspect.signature(strategy.execute).parameters:
+            exec_kwargs["all_comments"] = request.all_comments
+        result = await strategy.execute(**exec_kwargs)
 
         # 更新任务为完成
         TaskManager.update_task(
