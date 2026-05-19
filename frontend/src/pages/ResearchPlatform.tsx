@@ -8,6 +8,82 @@ import {
 } from '../components/MethodConfigPanel';
 import { Plus, Send, Trash2, Download, FlaskConical, ChevronDown, ChevronRight } from 'lucide-react';
 
+// ---- Sub-components (must be defined before use) ----
+
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const config: Record<string, { label: string; className: string }> = {
+    pending: { label: '待处理', className: 'bg-gray-100 text-gray-500' },
+    processing: { label: '处理中', className: 'bg-blue-100 text-blue-600' },
+    done: { label: '已完成', className: 'bg-green-100 text-green-600' },
+    rejected: { label: '已拒绝', className: 'bg-red-100 text-red-600' },
+  };
+  const c = config[status] || config.pending;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${c.className}`}>
+      {c.label}
+    </span>
+  );
+};
+
+const ReasoningChainCard: React.FC<{ chain: any }> = ({ chain }) => {
+  const [expanded, setExpanded] = React.useState(false);
+  const nodeColors: Record<string, string> = {
+    evidence: 'bg-blue-50 border-blue-200 text-blue-700',
+    inference: 'bg-purple-50 border-purple-200 text-purple-700',
+    conclusion: 'bg-red-50 border-red-200 text-red-700',
+    blocked: 'bg-green-50 border-green-200 text-green-700',
+  };
+
+  return (
+    <div className="border border-gray-100 rounded-lg">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium capitalize">{chain.attribute || 'Unknown'}</span>
+          {chain.blocked ? (
+            <span className="text-xs text-green-500">✓ 已阻断</span>
+          ) : (
+            <span className="text-xs text-red-500">✗ 泄露</span>
+          )}
+          <span className="text-xs text-gray-400">→ {chain.targetGuess || chain.target_guess || '-'}</span>
+        </div>
+        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </button>
+      {expanded && chain.nodes && (
+        <div className="px-4 pb-4 space-y-2">
+          {(chain.nodes as any[]).map((node: any, ni: number) => (
+            <div key={ni} className={`flex gap-3 p-3 rounded-lg border ${nodeColors[node.type] || 'bg-gray-50 border-gray-200'}`}>
+              <div className="shrink-0 w-6 h-6 rounded-full bg-white border flex items-center justify-center text-xs font-bold">
+                {ni + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium uppercase opacity-60">{node.type}</span>
+                  {node.confidence && (
+                    <span className="text-xs bg-white/50 px-1.5 py-0.5 rounded">
+                      置信度 {node.confidence}/5
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm">{node.text}</p>
+                {node.evidence && (
+                  <p className="mt-1 text-xs italic opacity-70">
+                    📎 证据: "{node.evidence}"
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---- Main Component ----
+
 const ResearchPlatform: React.FC = () => {
   const {
     state,
@@ -670,84 +746,9 @@ const ResearchPlatform: React.FC = () => {
         )}
       </div>
     </div>
-  );
-};
-
-// ---- Sub-components ----
-
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const config: Record<string, { label: string; className: string }> = {
-    pending: { label: '待处理', className: 'bg-gray-100 text-gray-500' },
-    processing: { label: '处理中', className: 'bg-blue-100 text-blue-600' },
-    done: { label: '已完成', className: 'bg-green-100 text-green-600' },
-    rejected: { label: '已拒绝', className: 'bg-red-100 text-red-600' },
-  };
-  const c = config[status] || config.pending;
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${c.className}`}
-    >
-      {c.label}
-    </span>
-  );
-};
-
-const ReasoningChainCard: React.FC<{ chain: any }> = ({ chain }) => {
-  const [expanded, setExpanded] = useState(false);
-  const nodeColors: Record<string, string> = {
-    evidence: 'bg-blue-50 border-blue-200 text-blue-700',
-    inference: 'bg-purple-50 border-purple-200 text-purple-700',
-    conclusion: 'bg-red-50 border-red-200 text-red-700',
-    blocked: 'bg-green-50 border-green-200 text-green-700',
-  };
-
-  return (
-    <div className="border border-gray-100 rounded-lg">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium capitalize">{chain.attribute || 'Unknown'}</span>
-          {chain.blocked ? (
-            <span className="text-xs text-green-500">✓ 已阻断</span>
-          ) : (
-            <span className="text-xs text-red-500">✗ 泄露</span>
-          )}
-          <span className="text-xs text-gray-400">→ {chain.targetGuess || chain.target_guess || '-'}</span>
-        </div>
-        {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-      </button>
-      {expanded && chain.nodes && (
-        <div className="px-4 pb-4 space-y-2">
-          {(chain.nodes as any[]).map((node: any, ni: number) => (
-            <div key={ni} className={`flex gap-3 p-3 rounded-lg border ${nodeColors[node.type] || 'bg-gray-50 border-gray-200'}`}>
-              <div className="shrink-0 w-6 h-6 rounded-full bg-white border flex items-center justify-center text-xs font-bold">
-                {ni + 1}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium uppercase opacity-60">{node.type}</span>
-                  {node.confidence && (
-                    <span className="text-xs bg-white/50 px-1.5 py-0.5 rounded">
-                      置信度 {node.confidence}/5
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm">{node.text}</p>
-                {node.evidence && (
-                  <p className="mt-1 text-xs italic opacity-70">
-                    📎 证据: "{node.evidence}"
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
     </>
   );
 };
+
 
 export default ResearchPlatform;
