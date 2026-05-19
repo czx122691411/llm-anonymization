@@ -60,6 +60,7 @@ type SessionAction =
   | { type: 'SET_PERSONA'; persona: Record<string, string> }
   | { type: 'ADD_PRIVACY_SNAPSHOT'; snapshot: PrivacySnapshot }
   | { type: 'UPDATE_RISK_SCORE'; index: number; score: number }
+  | { type: 'LOAD_SESSION'; data: { sessionId: string; persona: Record<string, string>; comments: any[]; privacyHistory?: PrivacySnapshot[] } }
   | { type: 'RESET' };
 
 // ---- Reducer ----
@@ -118,6 +119,31 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
           c.index === action.index ? { ...c, riskScore: action.score } : c
         ),
       };
+    case 'LOAD_SESSION': {
+      const comments: Comment[] = (action.data.comments || []).map((c: any, i: number) => ({
+        index: i,
+        originalText: c.original_text || c.originalText || '',
+        status: (c.status || 'done') as CommentStatus,
+        riskScore: c.risk_score || c.riskScore || 0,
+        finalAnonymizedText: c.rounds?.[c.rounds.length - 1]?.anonymized_text || null,
+        rounds: (c.rounds || []).map((r: any, ri: number) => ({
+          roundNum: r.round_num ?? r.roundNum ?? ri,
+          anonymizedText: r.anonymized_text || r.anonymizedText || '',
+          inferences: { test: r.inferences || [], chains: r.chains || [] } as any,
+          maxConfidence: r.max_confidence ?? r.maxConfidence ?? 0,
+          quality: r.quality || null,
+        })),
+      }));
+      return {
+        ...state,
+        sessionId: action.data.sessionId || state.sessionId,
+        persona: action.data.persona || {},
+        comments,
+        privacyHistory: action.data.privacyHistory || [],
+        selectedCommentIndex: 0,
+        selectedRound: 0,
+      };
+    }
     case 'RESET':
       return createInitialState();
     default:
@@ -148,6 +174,7 @@ interface SessionContextValue {
   setPersona: (persona: Record<string, string>) => void;
   addPrivacySnapshot: (snapshot: PrivacySnapshot) => void;
   updateRiskScore: (index: number, score: number) => void;
+  loadSession: (data: any) => void;
   reset: () => void;
   selectedComment: Comment | null;
 }
@@ -181,6 +208,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     (index: number, score: number) => dispatch({ type: 'UPDATE_RISK_SCORE', index, score }),
     []
   );
+  const loadSession = useCallback((data: any) => dispatch({ type: 'LOAD_SESSION', data }), []);
   const reset = useCallback(() => dispatch({ type: 'RESET' }), []);
 
   const selectedComment =
@@ -201,6 +229,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setPersona,
         addPrivacySnapshot,
         updateRiskScore,
+        loadSession,
         reset,
         selectedComment,
       }}

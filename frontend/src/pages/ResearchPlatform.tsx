@@ -96,6 +96,7 @@ const ResearchPlatform: React.FC = () => {
     setCommentStatus,
     addPrivacySnapshot,
     setPersona,
+    loadSession,
     reset,
   } = useSession();
 
@@ -242,22 +243,11 @@ const ResearchPlatform: React.FC = () => {
     try {
       const res = await fetch(`/api/session/load/${sessionId}`);
       const data = await res.json();
-      reset();
-      if (data.persona) setPersona(data.persona);
-      for (const c of data.comments || []) {
-        addComment(c.original_text);
-        const idx = state.comments.length;
-        for (const r of c.rounds || []) {
-          addRoundResult(idx, {
-            roundNum: r.round_num,
-            anonymizedText: r.anonymized_text,
-            inferences: { test: r.inferences, chains: r.chains } as any,
-            maxConfidence: r.max_confidence || 0,
-            quality: r.quality,
-          });
-        }
-        setCommentStatus(idx, c.status || 'done');
-      }
+      loadSession({
+        sessionId: data.session_id,
+        persona: data.persona || {},
+        comments: data.comments || [],
+      });
       setSavedSessions([]);
     } catch { alert('加载失败'); }
   };
@@ -541,7 +531,7 @@ const ResearchPlatform: React.FC = () => {
                       ].map((q) => (
                         <div key={q.label} className="text-center">
                           <p className={`text-2xl font-bold ${q.color}`}>
-                            {q.value.toFixed(0)}
+                            {q.value != null ? q.value.toFixed(0) : '-'}
                           </p>
                           <p className="text-xs text-gray-500 mt-1">{q.label}</p>
                         </div>
