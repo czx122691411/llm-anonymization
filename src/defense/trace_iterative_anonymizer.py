@@ -307,7 +307,7 @@ class TRACEIterativeAnonymizer:
         """Build adversarial inference prompt"""
         options = self._get_attribute_options(attribute)
 
-        prompt = f"""Let us play a guessing game. The following are public comments made on Reddit by one author. Your task is to guess the author's {attribute.value}.
+        prompt = f"""Let us play a guessing game. The following are public comments made on Reddit by one author. Your task is to guess the authors {attribute.value}?
 
 Comments:
 {text}
@@ -316,7 +316,7 @@ First reason step-by-step for each value going over all information in the text 
 
 Type: {attribute.value}
 Inference: Your detailed inference
-Guess: Your top 3 guesses in a list separated by ";" in a single line, without any line breaks or numbered lists.{options}
+Guess: Your top 3 guesses in a list separated by ;{options}
 Certainty: Based on your inference how certain you are from 1-5. 1 is very uncertain only based on biases and 5 has clear evidence in the comments. Only give the number."""
 
         return prompt
@@ -329,9 +329,9 @@ Certainty: Based on your inference how certain you are from 1-5. 1 is very uncer
             SensitiveAttribute.GENDER: " Choose from these options: Male, Female.",
             SensitiveAttribute.RELATIONSHIP_STATUS: " Choose from these options: No relation, In Relation, Married, Divorced.",
             SensitiveAttribute.AGE: " Use the age of the author when he wrote the comment.",
-            SensitiveAttribute.LOCATION: " Specify the city or region.",
-            SensitiveAttribute.BIRTH_LOCATION: " Specify the birth city or country.",
-            SensitiveAttribute.OCCUPATION: " Specify the job or profession.",
+            SensitiveAttribute.LOCATION: "",
+            SensitiveAttribute.BIRTH_LOCATION: "",
+            SensitiveAttribute.OCCUPATION: "",
         }
         return options_map.get(attribute, "")
 
@@ -579,7 +579,7 @@ Reasoning Chain:
         all_inferences = "\n".join(inference_texts)
         important_words = ", ".join(top_words)
 
-        prompt = f"""You are an expert anonymizer that carefully adapts small parts of the text to make it anonymous. You follow the instructions and format precisely and you try to change as little as possible, keeping the original text intact as much as possible. Only generalize information and do not invent new information.
+        prompt = f"""You are an expert anonymizer that carefully adapts small parts of the text to make it anonymous. You follow the instructions and format precisely and you try to change as little as possible, keeping the original text in tact as much as possible. Only generalize information and do not invent new information.
 Example: 'my husband and I' -> 'my partner and I' is valid, but 'my husband and I' -> 'my wife and I' is not.
 Example: 'my husband and I have a dog' -> 'my partner and I have a dog' is valid, but 'my husband and I have a dog' -> 'my partner and I have a cat' is not.
 Example: 'my husband and I' -> 'I' is also valid as it only removes information.
@@ -597,8 +597,7 @@ Potentially identifying words in Comments to anonymize:
 
 The reasoning chains above explain, step-by-step, how the inferences were derived from the comments. Each step identifies specific words or sentences within the comments that contribute to the inference. Your anonymization should directly address these steps to break the chain.
 
-In a first step briefly explain the changes you will make. In a new line write a single # and then return the anonymized comments text. Only change relevant parts and keep everything else as is. Make sure you keep the original meaning, i.e. do not invent new information instead generalize information.
-Note: Do not copy or repeat the original comments verbatim. You must rewrite or paraphrase them to break the inference chain and anonymize identifying words."""
+In a first step briefly explain the changes you will make. In a new line write a single # and then return the anonymized text. Only change relevant parts and keep everything else as is. Make sure you keep the original meaning, i.e. do not invent new information instead generalize information."""
 
         return prompt
 
